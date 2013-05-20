@@ -1,33 +1,33 @@
 /*  http_post_simple - do a POST to an HTTP URL and return the values
 
-    Copyright GPL 2003 by Mike Chirico <mchirico@users.sourceforge.net>
-    Updated: Sun Jun 13 13:53:14 EDT 2004
+ Copyright GPL 2003 by Mike Chirico <mchirico@users.sourceforge.net>
+ Updated: Sun Jun 13 13:53:14 EDT 2004
 
-    A few things to note with this example:
-      .. note the \r\n .. it needs a carrage return line feed
+ A few things to note with this example:
+ .. note the \r\n .. it needs a carrage return line feed
 
-          "POST /test.php HTTP/1.0\r\n"
-          "Host: souptonuts.sourceforge.net\r\n"
+ "POST /test.php HTTP/1.0\r\n"
+ "Host: souptonuts.sourceforge.net\r\n"
 
-      souptonuts.sourceforge.net ip address is 66.35.250.209
-      but use the dns name "souptonuts.sourceforge.net"
+ souptonuts.sourceforge.net ip address is 66.35.250.209
+ but use the dns name "souptonuts.sourceforge.net"
 
-      A note on Content-length
+ A note on Content-length
 
-         "Content-length: 36\r\n\r\n"
-        ->"mode=login&user=test&password=test\r\n"<-- 36 characters
+ "Content-length: 36\r\n\r\n"
+ ->"mode=login&user=test&password=test\r\n"<-- 36 characters
 
-      36 is the length of the string "mode=login&user=test&password=test\r\n"
-      If the string is changed, then length must be adjusted.
+ 36 is the length of the string "mode=login&user=test&password=test\r\n"
+ If the string is changed, then length must be adjusted.
 
-     Reference:
-      http://souptonuts.sourceforge.net/chirico/test.php
-      http://souptonuts.sourceforge.net/code/test.php.html
+ Reference:
+ http://souptonuts.sourceforge.net/chirico/test.php
+ http://souptonuts.sourceforge.net/code/test.php.html
 
-     Download:
-      http://prdownloads.sourceforge.net/cpearls/spider.tar.gz?download
+ Download:
+ http://prdownloads.sourceforge.net/cpearls/spider.tar.gz?download
 
-*/
+ */
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -47,7 +47,6 @@
 #define MAXLINE 4096
 #define MAXSUB  200
 
-
 #define LISTENQ         1024
 
 extern int h_errno;
@@ -56,15 +55,15 @@ ssize_t process_http(int sockfd, char *host, char *page, char *poststr)
 {
 	char sendline[MAXLINE + 1], recvline[MAXLINE + 1];
 	ssize_t n;
-	snprintf(sendline, MAXSUB,
-		 "POST %s HTTP/1.0\r\n"
-		 "Host: %s\r\n"
-		 "Content-type: application/x-www-form-urlencoded\r\n"
-		 "Content-length: %d\r\n\r\n"
-		 "%s", page, host, strlen(poststr), poststr);
+	snprintf(sendline, MAXSUB, "POST %s HTTP/1.0\r\n"
+			"Host: %s\r\n"
+			"Content-type: application/x-www-form-urlencoded\r\n"
+			"Content-length: %d\r\n\r\n"
+			"%s", page, host, strlen(poststr), poststr);
 
 	write(sockfd, sendline, strlen(sendline));
-	while ((n = read(sockfd, recvline, MAXLINE)) > 0) {
+	while ((n = read(sockfd, recvline, MAXLINE)) > 0)
+	{
 		recvline[n] = '\0';
 		printf("%s", recvline);
 	}
@@ -85,18 +84,18 @@ int main(void)
 
 	char str[50];
 	struct hostent *hptr;
-	if ((hptr = gethostbyname(hname)) == NULL) {
-		fprintf(stderr, " gethostbyname error for host: %s: %s",
-			hname, hstrerror(h_errno));
+	if ((hptr = gethostbyname(hname)) == NULL )
+	{
+		fprintf(stderr, " gethostbyname error for host: %s: %s", hname, hstrerror(h_errno));
 		exit(1);
 	}
 	printf("hostname: %s\n", hptr->h_name);
-	if (hptr->h_addrtype == AF_INET
-	    && (pptr = hptr->h_addr_list) != NULL) {
-		printf("address: %s\n",
-		       inet_ntop(hptr->h_addrtype, *pptr, str,
-				 sizeof(str)));
-	} else {
+	if (hptr->h_addrtype == AF_INET && (pptr = hptr->h_addr_list) != NULL )
+	{
+		printf("address: %s\n", inet_ntop(hptr->h_addrtype, *pptr, str, sizeof(str)));
+	}
+	else
+	{
 		fprintf(stderr, "Error call inet_ntop \n");
 	}
 
@@ -106,7 +105,7 @@ int main(void)
 	servaddr.sin_port = htons(80);
 	inet_pton(AF_INET, str, &servaddr.sin_addr);
 
-	connect(sockfd, (SA *) & servaddr, sizeof(servaddr));
+	connect(sockfd, (SA *) &servaddr, sizeof(servaddr));
 	process_http(sockfd, hname, page, poststr);
 	close(sockfd);
 	exit(0);
