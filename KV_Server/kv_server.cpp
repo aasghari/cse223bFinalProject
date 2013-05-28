@@ -4,11 +4,33 @@
  *  Created on: May 19, 2013
  *      Author: aasghari
  */
-
+#include <boost/lexical_cast.hpp>
 #include "kv_store.h"
-int main(int argc, char* argv)
+#include "MessageHandler.h"
+class KVServer
 {
-	KeyValueStore myMap(argv);
+	KeyValueStore myMap;
+	MessageHandler net;
+public:
+	KVServer(const char* hostID, const char* multicastIP, unsigned short multicastPort)
+		:myMap(hostID), net(multicastIP,multicastPort)
+	{
+
+	}
+	void start()
+	{
+		net.startHandler();
+	}
+};
+
+int main(int argc, char** argv)
+{
+
+	char* hostID = argv[1];
+	char* mcastIP= argv[2];
+	unsigned short mcastPort=boost::lexical_cast<unsigned short>(argv[3]);
+	KVServer server(hostID, mcastIP, mcastPort);
+	server.start();
 
 }
 
