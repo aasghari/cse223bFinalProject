@@ -12,16 +12,19 @@ MessageHandler::MessageHandler(	const char* multicast_address,const short multic
 		endpoint_(boost::asio::ip::address::from_string(multicast_address), multicast_port), socket_(io_service, endpoint_.protocol()),
 		timer_(io_service), bytesSent(0), bytesRec(0), msgsSent(0), msgsRec(0)
 {
+    socket_.set_option(boost::asio::ip::multicast::join_group(endpoint_.address()));
+    socket_.set_option(boost::asio::ip::multicast::enable_loopback( true ) );
+
 }
 MessageHandler::~MessageHandler()
 {
 	this->stopHandler();
 }
-void MessageHandler::sendMulticast(const char* message)
+void MessageHandler::sendMessage(const char* message)
 {
-	sendMulticast(std::string(message));
+	sendMessage(std::string(message));
 }
-void MessageHandler::sendMulticast(const std::string& message)
+void MessageHandler::sendMessage(const std::string& message)
 {
 	this->msgsSent++;
 	this->bytesSent += message.size();
@@ -38,6 +41,7 @@ void MessageHandler::handle_send_to(const boost::system::error_code& error)
 	{
 		//TODO resend the message
 	}
+	this->asynchWaitForData();
 }
 
 void MessageHandler::handle_receive_from(const boost::system::error_code& error,
@@ -57,11 +61,7 @@ void MessageHandler::handle_receive_from(const boost::system::error_code& error,
 		std::cout << std::endl;
 	}
 
-	socket_.async_receive_from(
-			boost::asio::buffer(data_, DATA_MAX_LENGTH), this->endpoint_,
-			boost::bind(&MessageHandler::handle_receive_from, this,
-					boost::asio::placeholders::error,
-					boost::asio::placeholders::bytes_transferred));
+	this->asynchWaitForData();
 
 }
 void MessageHandler::handle_timeout(const boost::system::error_code& error)
@@ -70,11 +70,21 @@ void MessageHandler::handle_timeout(const boost::system::error_code& error)
 	{
 		//TODO resend the message if not all members of clique have replied
 	}
+	this->asynchWaitForData();
 }
 
+void MessageHandler::asynchWaitForData()
+{
+	socket_.async_receive_from(
+			boost::asio::buffer(data_, DATA_MAX_LENGTH), this->endpoint_,
+			boost::bind(&MessageHandler::handle_receive_from, this,
+					boost::asio::placeholders::error,
+					boost::asio::placeholders::bytes_transferred));
+}
 
 void MessageHandler::startHandler()
 {
+	this->asynchWaitForData();
 	this->io_service.run();
 }
 void MessageHandler::stopHandler()

@@ -26,8 +26,8 @@ class MessageHandler
 public:
 	MessageHandler(	const char* multicast_address, const short multicast_port);
 	virtual ~MessageHandler();
-	void sendMulticast(const char* message);
-	void sendMulticast(const std::string& message);
+	void sendMessage(const char* message);
+	void sendMessage(const std::string& message);
 
 
 	void handle_send_to(const boost::system::error_code& error);
@@ -37,7 +37,9 @@ public:
 	void startHandler();
 	void stopHandler();
 
+
 private:
+	void asynchWaitForData();
 	boost::asio::io_service io_service;
 	boost::asio::ip::udp::endpoint endpoint_;
 	boost::asio::ip::udp::socket socket_;

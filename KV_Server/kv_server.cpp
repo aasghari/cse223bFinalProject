@@ -21,6 +21,12 @@ public:
 	{
 		net.startHandler();
 	}
+
+	void put(std::string key, std::string value)
+	{
+		myMap.addValueToList(key, value);
+		net.sendMessage(key);
+	}
 };
 
 int main(int argc, char** argv)
@@ -29,8 +35,9 @@ int main(int argc, char** argv)
 	char* hostID = argv[1];
 	char* mcastIP= argv[2];
 	unsigned short mcastPort=boost::lexical_cast<unsigned short>(argv[3]);
-	KVServer server(hostID, mcastIP, mcastPort);
-	server.start();
+	KVServer kvstore(hostID, mcastIP, mcastPort);
+	kvstore.put("test", "test");
+	kvstore.start();
 
 }
 
