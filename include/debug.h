@@ -9,11 +9,11 @@
 #define DEBUG_H_
 #ifdef NO_DEBUG
 
-#define debug if(false) std::cout<<__FILE__<<":"<<__LINE__<<"- "
+#define debug if(false) std::cout<<"("<<__FILE__<<":"<<__LINE__<<"): "
 
 #else
 
-#define debug std::cout<<__FILE__<<":"<<__LINE__<<"- "
+#define debug std::cout<<"("<<__FILE__<<":"<<__LINE__<<"): "
 
 #endif
 

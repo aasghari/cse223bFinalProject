@@ -18,7 +18,7 @@ all: $(TARGET)
 	$(CXX) -g -Wall -DHAVE_NETINET_IN_H $(INC) -c $< -o $@
 
 $(TARGET): $(OBJS)
-	$(CXX) -L$(LIB) $^ -o $@ -pthread -lkv_base -lboost_system-mt -lboost_thread-mt 
+	$(CXX) -L$(LIB) $^ '-Wl,--rpath=$$ORIGIN' -o $@ -pthread -lkv_base -lboost_system-mt -lboost_thread-mt 
 
 clean:
 	$(RM) *.o $(TARGET)
