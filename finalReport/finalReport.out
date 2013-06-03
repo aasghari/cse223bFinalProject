@@ -1,0 +1,12 @@
+\BOOKMARK [1][-]{section.1}{Introduction}{}% 1
+\BOOKMARK [1][-]{section.2}{Motivation}{}% 2
+\BOOKMARK [1][-]{section.3}{Description of Our Multicast Protocol}{}% 3
+\BOOKMARK [2][-]{subsection.3.1}{The Master Node}{section.3}% 4
+\BOOKMARK [2][-]{subsection.3.2}{The Clique Nodes}{section.3}% 5
+\BOOKMARK [2][-]{subsection.3.3}{The Non-Clique Nodes}{section.3}% 6
+\BOOKMARK [2][-]{subsection.3.4}{The Heartbeat}{section.3}% 7
+\BOOKMARK [1][-]{section.4}{Environment Set-up}{}% 8
+\BOOKMARK [1][-]{section.5}{Experiments}{}% 9
+\BOOKMARK [1][-]{section.6}{Conclusion }{}% 10
+\BOOKMARK [1][-]{section.7}{Future Work}{}% 11
+\BOOKMARK [2][-]{subsection.7.1}{The Synchronization Protocol}{section.7}% 12
