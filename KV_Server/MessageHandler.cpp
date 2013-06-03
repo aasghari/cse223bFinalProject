@@ -8,9 +8,9 @@
 #include "MessageHandler.h"
 
 
-MessageHandler::MessageHandler(	const char* multicast_address,const short multicast_port) :
-		endpoint_(boost::asio::ip::address::from_string(multicast_address), multicast_port), socket_(io_service),
-		timer_(io_service), bytesSent(0), bytesRec(0), msgsSent(0), msgsRec(0)
+MessageHandler::MessageHandler(	const char* multicast_address,const short multicast_port,MessageHandler::MessageHandlerCallback& callback) :
+	msgRevCallback(callback),endpoint_(boost::asio::ip::address::from_string(multicast_address), multicast_port), socket_(io_service),
+	timer_(io_service), bytesSent(0), bytesRec(0), msgsSent(0), msgsRec(0)
 {
 
 	boost::asio::ip::udp::endpoint listen_endpoint;
@@ -33,7 +33,7 @@ MessageHandler::MessageHandler(	const char* multicast_address,const short multic
 	debug<<"setting loopback option"<<std::endl;
 	socket_.set_option(boost::asio::ip::multicast::enable_loopback(true));
 	debug<<"joinning mulitcast group"<<std::endl;
-    socket_.set_option(boost::asio::ip::multicast::join_group(endpoint_.address()));
+	socket_.set_option(boost::asio::ip::multicast::join_group(endpoint_.address()));
 
 }
 MessageHandler::~MessageHandler()
@@ -77,8 +77,7 @@ void MessageHandler::handle_receive_from(const boost::system::error_code& error,
 		this->msgsRec++;
 		this->bytesRec+=bytes_recvd;
 		//TODO do something with received data, maybe pass it off to application
-		std::cout.write(data_, bytes_recvd);
-		std::cout << std::endl;
+		this->msgRevCallback.handleMessage(data_, bytes_recvd);
 	}
 
 	this->asynchWaitForData();

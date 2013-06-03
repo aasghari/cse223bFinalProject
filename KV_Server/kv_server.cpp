@@ -7,16 +7,21 @@
 #include <boost/lexical_cast.hpp>
 #include "kv_store.h"
 #include "MessageHandler.h"
-class KVServer
+class KVServer: public MessageHandler::MessageHandlerCallback
 {
 	KeyValueStore myMap;
 	MessageHandler net;
 public:
 	KVServer(const char* hostID, const char* multicastIP, unsigned short multicastPort)
-		:myMap(hostID), net(multicastIP,multicastPort)
+		:myMap(hostID), net(multicastIP,multicastPort, *this)
 	{
 
 	}
+	void handleMessage(char* message, size_t numBytes)
+	{
+		debug<<"handleMessage: "<<message<<std::endl;
+	}
+
 	void start()
 	{
 		net.startHandler();
@@ -27,6 +32,7 @@ public:
 		myMap.addValueToList(key, value);
 		net.sendMessage(key);
 	}
+
 };
 
 int main(int argc, char** argv)

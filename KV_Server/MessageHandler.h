@@ -20,11 +20,19 @@
 #include <boost/asio.hpp>
 #include <boost/scoped_ptr.hpp>
 #include <boost/bind.hpp>
+#include <string>
 #include "debug.h"
 class MessageHandler
 {
 public:
-	MessageHandler(	const char* multicast_address, const short multicast_port);
+	class MessageHandlerCallback
+	{
+	public:
+		virtual void handleMessage(char* message, size_t numBytes)=0;
+	};
+public:
+	typedef void (*MessageCallbackFun)(std::string& message) ;
+	MessageHandler(	const char* multicast_address, const short multicast_port,MessageHandler::MessageHandlerCallback& callback );
 	virtual ~MessageHandler();
 	void sendMessage(const char* message);
 	void sendMessage(const std::string& message);
@@ -37,8 +45,8 @@ public:
 	void startHandler();
 	void stopHandler();
 
-
 private:
+	MessageHandler::MessageHandlerCallback& msgRevCallback;
 	void asynchWaitForData();
 	boost::asio::io_service io_service;
 	boost::asio::ip::udp::endpoint endpoint_;
