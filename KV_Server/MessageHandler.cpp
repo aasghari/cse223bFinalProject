@@ -12,8 +12,8 @@ MessageHandler::MessageHandler(	const char* multicast_address,const short multic
 	msgRevCallback(callback),endpoint_(boost::asio::ip::address::from_string(multicast_address), multicast_port), socket_(io_service),
 	timer_(io_service), bytesSent(0), bytesRec(0), msgsSent(0), msgsRec(0)
 {
-
 	boost::asio::ip::udp::endpoint listen_endpoint;
+
 	if(endpoint_.address().is_v4())
 	{
 		listen_endpoint=boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(),multicast_port);
@@ -22,18 +22,26 @@ MessageHandler::MessageHandler(	const char* multicast_address,const short multic
 	{
 		listen_endpoint=boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v6(),multicast_port);
 	}
+
 	debug<<"socket open ("<<multicast_address<<":"<<multicast_port<<")"<<std::endl;
 	socket_.open(endpoint_.protocol());
+
+//	debug<<"enable broadcast"<<std::endl;
+//	socket_.set_option(boost::asio::socket_base::broadcast(true));
+
 	debug<<"setting reuse option"<<std::endl;
 	socket_.set_option(boost::asio::ip::udp::socket::reuse_address(true));
 	debug<<"socket binding"<<std::endl;
 	socket_.bind(listen_endpoint);
-
-
 	debug<<"setting loopback option"<<std::endl;
 	socket_.set_option(boost::asio::ip::multicast::enable_loopback(true));
-	debug<<"joinning mulitcast group"<<std::endl;
+
+	debug<<"joinning mulitcast group:"<<endpoint_.address().to_string()<<std::endl;
 	socket_.set_option(boost::asio::ip::multicast::join_group(endpoint_.address()));
+
+
+
+
 
 }
 MessageHandler::~MessageHandler()
@@ -48,6 +56,7 @@ void MessageHandler::sendMessage(const std::string& message)
 {
 	this->msgsSent++;
 	this->bytesSent += message.size();
+	debug<<"sending to:"<<endpoint_.address().to_string()<<std::endl;
 	socket_.async_send_to(boost::asio::buffer(message), endpoint_,
 			boost::bind(&MessageHandler::handle_send_to, this, boost::asio::placeholders::error));
 }

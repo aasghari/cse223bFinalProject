@@ -19,6 +19,7 @@ public:
 	}
 	void handleMessage(char* message, size_t numBytes)
 	{
+		message[numBytes]=0;
 		debug<<"handleMessage: "<<message<<std::endl;
 	}
 
