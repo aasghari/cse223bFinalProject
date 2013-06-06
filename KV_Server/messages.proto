@@ -1,0 +1,6 @@
+message DataPassMsg
+{
+    repeated int32 cliqueIDs = 1 ; //Hosts that must reply to this message
+    required string vectorClock=2; //the vector clock for this message
+    required bytes clientMsg = 3 ; //the actually message sent
+}
