@@ -1,0 +1,4 @@
+Dependencies:
+libprotobuf
+libboost_system-mt 
+libboost_thread-mt
