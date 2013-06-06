@@ -8,9 +8,11 @@
 #include "MessageHandler.h"
 
 
-MessageHandler::MessageHandler(	const char* multicast_address,const short multicast_port,MessageHandler::MessageHandlerCallback& callback) :
-	msgRevCallback(callback),endpoint_(boost::asio::ip::address::from_string(multicast_address), multicast_port), socket_(io_service),
-	timer_(io_service), bytesSent(0), bytesRec(0), msgsSent(0), msgsRec(0)
+MessageHandler::MessageHandler(	const char* multicast_address,const short multicast_port,MessageHandler::MessageHandlerCallback& callback,std::string& serverID) :
+	msgRevCallback(callback),
+	endpoint_(boost::asio::ip::address::from_string(multicast_address), multicast_port),
+	socket_(io_service),timer_(io_service),
+	myClock(serverID),serverID(serverID),bytesSent(0), bytesRec(0), msgsSent(0), msgsRec(0)
 {
 	boost::asio::ip::udp::endpoint listen_endpoint;
 
@@ -38,10 +40,6 @@ MessageHandler::MessageHandler(	const char* multicast_address,const short multic
 
 	debug<<"joinning mulitcast group:"<<endpoint_.address().to_string()<<std::endl;
 	socket_.set_option(boost::asio::ip::multicast::join_group(endpoint_.address()));
-
-
-
-
 
 }
 MessageHandler::~MessageHandler()
@@ -121,3 +119,29 @@ void MessageHandler::stopHandler()
 	this->io_service.stop();
 }
 
+MessageHandler::Message::Message(const std::string& message, std::vector<const std::string>& cliqueIDs):numRetries(0)
+{
+
+}
+void MessageHandler::Message::recievedReply(const std::string& nodeID)
+{
+	google::protobuf::RepeatedPtrField< ::google::protobuf::string >* mutableIDs=this->msg.mutable_cliqueids();
+
+	for(google::protobuf::RepeatedPtrField< ::google::protobuf::string >::iterator it=mutableIDs->begin();
+			it!=mutableIDs->end(); it++)
+	{
+	}
+
+}
+bool MessageHandler::Message::allRepliesRec()
+{
+	return this->msg.cliqueids().size()<=0;
+}
+int MessageHandler::Message::getNumRetries()
+{
+	return this->numRetries;
+}
+void MessageHandler::Message::incNumRetries()
+{
+	this->numRetries++;
+}

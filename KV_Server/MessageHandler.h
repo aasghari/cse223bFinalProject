@@ -22,7 +22,10 @@
 #include <boost/bind.hpp>
 #include <string>
 #include <set>
+#include <string>
 #include "debug.h"
+#include "messages.pb.h"
+#include "VectorClock.hpp"
 class MessageHandler
 {
 public:
@@ -32,7 +35,7 @@ public:
 		virtual void handleMessage(char* message, size_t numBytes)=0;
 	};
 public:
-	MessageHandler(	const char* multicast_address, const short multicast_port,MessageHandler::MessageHandlerCallback& callback );
+	MessageHandler(	const char* multicast_address, const short multicast_port,MessageHandler::MessageHandlerCallback& callback, std::string& serverID );
 	virtual ~MessageHandler();
 	void sendMessage(const char* message);
 	void sendMessage(const std::string& message);
@@ -50,34 +53,16 @@ private:
 	class Message
 	{
 	public:
-		typedef std::set<int> Clique;
-		Message(const Clique& cliq, const std::string& message):
-			clique(cliq),message(message),numRetries(0)
-		{
-
-		}
-		void recievedReply(int nodeID)
-		{
-			this->clique.erase(nodeID);
-		}
-		bool allRepliesRec()
-		{
-			return this->clique.size()<=0;
-		}
-		int getNumRetries()
-		{
-			return this->numRetries;
-		}
-		void incNumRetries()
-		{
-			this->numRetries++;
-		}
+		Message(const std::string& message, std::vector<const std::string>& cliqueIDs);
+		void recievedReply(const std::string& nodeID);
+		bool allRepliesRec();
+		int getNumRetries();
+		void incNumRetries();
 
 
 	private:
 
-		Clique clique;
-		std::string message;
+		Network::DataPassMsg msg;
 		int numRetries;
 	};
 	MessageHandler::MessageHandlerCallback& msgRevCallback;
@@ -90,6 +75,8 @@ private:
 	static const int DATA_MAX_LENGTH = 1024;
 	char data_[DATA_MAX_LENGTH];//buffer to store data in
 
+	VectorClock myClock;
+	const std::string serverID;
 	int bytesSent;//track number of bytes sent
 	int bytesRec;//track number of bytes recieved
 	int msgsSent;	//Track number of messages sent

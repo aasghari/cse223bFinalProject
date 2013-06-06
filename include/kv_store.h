@@ -26,7 +26,6 @@ class KeyValueStore
 	typedef std::set<Value> ValueList;
 	typedef std::map<std::string, ValueList> KeyValueMap;
 	KeyValueMap keymap;
-	VectorClock myClock;
 public:
 	KeyValueStore(std::string myId);
 	void addValueToList(const std::string& key, const std::string& value);

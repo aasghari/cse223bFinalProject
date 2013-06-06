@@ -12,8 +12,8 @@ class KVServer: public MessageHandler::MessageHandlerCallback
 	KeyValueStore myMap;
 	MessageHandler net;
 public:
-	KVServer(const char* hostID, const char* multicastIP, unsigned short multicastPort)
-		:myMap(hostID), net(multicastIP,multicastPort, *this)
+	KVServer(std::string serverID, const char* multicastIP, unsigned short multicastPort)
+		:myMap(serverID), net(multicastIP,multicastPort, *this,serverID)
 	{
 
 	}
@@ -39,10 +39,10 @@ public:
 int main(int argc, char** argv)
 {
 
-	char* hostID = argv[1];
+	char* serverID = argv[1];
 	char* mcastIP= argv[2];
 	unsigned short mcastPort=boost::lexical_cast<unsigned short>(argv[3]);
-	KVServer kvstore(hostID, mcastIP, mcastPort);
+	KVServer kvstore(serverID, mcastIP, mcastPort);
 	kvstore.put("test", "test");
 	kvstore.start();
 
