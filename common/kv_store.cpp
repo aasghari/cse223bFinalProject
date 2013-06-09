@@ -7,26 +7,16 @@
 
 #include "kv_store.h"
 
-Value::Value(const std::string& value, const VectorClock& clock):
-	value(value), vecClock(clock)
-{
-
-}
-bool Value::operator<(const Value& other) const
-{
-	return this->vecClock < other.vecClock;
-}
 
 
 
-KeyValueStore::KeyValueStore(std::string myId):
-		myClock(myId)
+KeyValueStore::KeyValueStore(std::string myId)
 {
 
 }
 void KeyValueStore::addValueToList(const std::string& key, const std::string& value)
 {
-	this->keymap[key].insert(Value(value,++myClock));
+	this->keymap[key].insert(value);
 }
 
 KeyValueStore::ValueList KeyValueStore::getValues(const std::string& key)

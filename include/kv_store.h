@@ -14,16 +14,15 @@
 class Value
 {
 	std::string value;
-	VectorClock vecClock;
 
 public:
-	Value(const std::string& value, const VectorClock& clock);
+	Value(const std::string& value);
 	bool operator<(const Value& other) const;
 
 };
 class KeyValueStore
 {
-	typedef std::set<Value> ValueList;
+	typedef std::set<std::string> ValueList;
 	typedef std::map<std::string, ValueList> KeyValueMap;
 	KeyValueMap keymap;
 public:

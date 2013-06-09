@@ -23,6 +23,7 @@
 #include <string>
 #include <set>
 #include <string>
+#include <vector>
 #include "debug.h"
 #include "messages.pb.h"
 #include "VectorClock.hpp"
@@ -32,7 +33,7 @@ public:
 	class MessageHandlerCallback
 	{
 	public:
-		virtual void handleMessage(char* message, size_t numBytes)=0;
+		virtual void handleMessage(const char* message, size_t numBytes)=0;
 	};
 public:
 	MessageHandler(	const char* multicast_address, const short multicast_port,MessageHandler::MessageHandlerCallback& callback, std::string& serverID );
@@ -53,29 +54,44 @@ private:
 	class Message
 	{
 	public:
-		Message(const std::string& message, std::vector<const std::string>& cliqueIDs);
+		Message(const std::string& message, VectorClock& vectorClock, const std::set<std::string>& cliqueIDs);
+		Message();//dummy ctor for look ups;
 		void recievedReply(const std::string& nodeID);
-		bool allRepliesRec();
-		int getNumRetries();
+		bool allRepliesRec() const;
+		int getNumRetries() const;
+		int getID() const;
 		void incNumRetries();
+		std::string toBuffer() const;
+
+		inline bool operator==(const Message& other) const {return this->getID()==other.getID(); }
+		inline bool operator!=(const Message& other) const {return !this->operator==(other);}
+		inline bool operator< (const Message& other) const {return this->getID()<other.getID();}
+		inline bool operator> (const Message& other) const {return  other.operator< (*this);}
+		inline bool operator<=(const Message& other) const {return !this->operator> (other);}
+		inline bool operator>=(const Message& other) const {return !this->operator< (other);}
+
 
 
 	private:
 
-		Network::DataPassMsg msg;
+		::Network::DataPassMsg msg;
 		int numRetries;
+
 	};
 	MessageHandler::MessageHandlerCallback& msgRevCallback;
 	void asynchWaitForData();
 	boost::asio::io_service io_service;
-	boost::asio::ip::udp::endpoint endpoint_;
+	boost::asio::ip::udp::endpoint sendToEndpoint;
+	boost::asio::ip::udp::endpoint recFromEndpoint;
 	boost::asio::ip::udp::socket socket_;
 	boost::asio::deadline_timer timer_;
 
 	static const int DATA_MAX_LENGTH = 1024;
 	char data_[DATA_MAX_LENGTH];//buffer to store data in
 
+	std::map<int,Message> pendingMsgs;
 	VectorClock myClock;
+	std::set< std::string> currentClique;
 	const std::string serverID;
 	int bytesSent;//track number of bytes sent
 	int bytesRec;//track number of bytes recieved

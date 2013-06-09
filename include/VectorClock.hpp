@@ -24,7 +24,14 @@ public:
 	{
 		this->clock[myid];
 	}
-
+	std::string encodeClock()
+	{
+		return "tempVecClockFIXME";
+	}
+	int getMyTime()
+	{
+		return this->clock[myid];
+	}
 	bool operator>(const VectorClock& other) const
 	{
 		VectorClock & nonConstMe=(VectorClock&)(*this);
