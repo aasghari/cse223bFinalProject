@@ -99,7 +99,7 @@ public:
 	VectorClock operator++(int)
 	{
 		VectorClock tmp(*this);
-		operator++();
+		incMyClock();
 		return tmp;
 	}
 	void merge(VectorClock& other)

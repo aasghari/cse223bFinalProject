@@ -19,7 +19,7 @@ public:
 	}
 	void handleMessage(const char* message, size_t numBytes)
 	{
-		debug<<"handleMessage: "<<message<<std::endl;
+		debug<<"handleMessage: "<<message<<" num bytes:"<<numBytes<<std::endl;
 	}
 
 	void start()
@@ -42,8 +42,15 @@ int main(int argc, char** argv)
 	char* mcastIP= argv[2];
 	unsigned short mcastPort=boost::lexical_cast<unsigned short>(argv[3]);
 	KVServer kvstore(serverID, mcastIP, mcastPort);
-	kvstore.put("test", "test");
-	kvstore.put("test2","test2");
+//	if(serverID[0]!='1')
+//	{
+		for(int i=0; i<10; i++)
+		{
+			std::stringstream key;
+			key<<"test"<<i;
+			kvstore.put(key.str(), "test");
+		}
+//	}
 	kvstore.start();
 
 }

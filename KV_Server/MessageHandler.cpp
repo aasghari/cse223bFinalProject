@@ -7,14 +7,13 @@
 
 #include "MessageHandler.h"
 
-
 MessageHandler::MessageHandler(	const char* multicast_address,const short multicast_port,MessageHandler::MessageHandlerCallback& callback,std::string& serverID) :
 	msgRevCallback(callback),
 	sendToEndpoint(boost::asio::ip::address::from_string(multicast_address), multicast_port),
 	socket_(io_service),timer_(io_service),
 	myClock(serverID),serverID(serverID),bytesSent(0), bytesRec(0), msgsSent(0), msgsRec(0)
 {
-	this->currentClique.insert(serverID);
+	this->currentClique.insert("1");
 	boost::asio::ip::udp::endpoint listen_endpoint;
 
 	if(sendToEndpoint.address().is_v4())
@@ -57,18 +56,37 @@ void MessageHandler::sendMessage(const std::string& message)
 	this->bytesSent += message.size();
 
 
-	this->myClock++;
-	Message msg(message, this->myClock,this->currentClique);
+	Message msg(message, ++this->myClock,this->currentClique);
 	const MessageHandler::Message& addedMsg=this->pendingMsgs[msg.getID()]=msg;
 	debug<<"sending msg:"<<addedMsg.getID()<<" to:"<<sendToEndpoint.address().to_string()<<std::endl;
-	socket_.async_send_to(boost::asio::buffer(addedMsg.toBuffer()), sendToEndpoint,
-			boost::bind(&MessageHandler::handle_send_to, this, boost::asio::placeholders::error));
+
+	boost::shared_ptr<std::string> msgShardPtr(new std::string(addedMsg.toBuffer()));
+	socket_.async_send_to(boost::asio::buffer(*msgShardPtr), sendToEndpoint,
+			boost::bind(&MessageHandler::handle_send_to, this, msgShardPtr,
+		            boost::asio::placeholders::error,
+		            boost::asio::placeholders::bytes_transferred));
 }
-void MessageHandler::handle_send_to(const boost::system::error_code& error)
+void MessageHandler::handle_send_to(boost::shared_ptr<std::string> message,
+	      const boost::system::error_code& error,
+	      std::size_t bytes_sent)
 {
+	::Network::MsgWrapper wrap;
+	wrap.ParseFromString(*message);
+	std::stringstream dbgmsg;
+
+	if(wrap.has_ackmsg())
+	{
+		dbgmsg << "Sending Ack for message"<<wrap.ackmsg().msgid();
+	}
+
+	if(wrap.has_datamsg())
+	{
+		dbgmsg<<"Sending data msgid:"<<wrap.datamsg().msgid()<<" msg:"<<wrap.datamsg().clientmsg();
+	}
 	if (!error)
 	{
-		debug<<"Successfully sent message"<<std::endl;
+		debug<<"Successfully sent message:"<<dbgmsg.str()<<std::endl;
+
 	}
 	else
 	{
@@ -77,7 +95,7 @@ void MessageHandler::handle_send_to(const boost::system::error_code& error)
 	this->asynchWaitForData();
 }
 
-void MessageHandler::handle_receive_from(const boost::system::error_code& error,
+void MessageHandler::handle_receive_from(boost::shared_array<char> data,const boost::system::error_code& error,
 		size_t bytes_recvd)
 {
 	if (error)
@@ -91,25 +109,31 @@ void MessageHandler::handle_receive_from(const boost::system::error_code& error,
 		this->bytesRec+=bytes_recvd;
 		//TODO do something with received data, maybe pass it off to application
 		::Network::MsgWrapper msgwrap;
-		msgwrap.ParseFromArray(data_, bytes_recvd);
+		msgwrap.ParseFromArray(data.get(), bytes_recvd);
 		if(msgwrap.has_datamsg())
 		{
 			const ::Network::DataPassMsg& datamsg=msgwrap.datamsg();
 			this->msgRevCallback.handleMessage(datamsg.clientmsg().data(), datamsg.clientmsg().size());
-			::Network::MsgWrapper ackWrap;
-			ackWrap.mutable_ackmsg()->set_serverid(this->serverID);
-			ackWrap.mutable_ackmsg()->set_msgid(datamsg.msgid());
-			ackWrap.mutable_ackmsg()->set_vectorclock(this->myClock.encodeClock());
+
 
 			debug<<"Got msg from:"<<this->recFromEndpoint.address().to_string()<<" for msgid:"<<datamsg.msgid()<<std::endl;
 			for(int i=0; i<datamsg.cliqueids_size();i++)
 			{
 				if(datamsg.cliqueids(i)==this->serverID)
 				{
+					::Network::MsgWrapper ackWrap;
+					ackWrap.mutable_ackmsg()->set_serverid(this->serverID);
+					ackWrap.mutable_ackmsg()->set_msgid(datamsg.msgid());
+					ackWrap.mutable_ackmsg()->set_vectorclock(this->myClock.encodeClock());
 					debug<<"\tthis serverID:"<<this->serverID<<" is in the requested clique. Sending reply to:"<<
 							this->recFromEndpoint.address().to_string()<<std::endl;
-					socket_.async_send_to(boost::asio::buffer(ackWrap.SerializeAsString()), this->recFromEndpoint,
-												boost::bind(&MessageHandler::handle_send_to, this, boost::asio::placeholders::error));
+
+					boost::shared_ptr<std::string> ackMsg(new std::string(ackWrap.SerializeAsString()));
+					socket_.async_send_to(boost::asio::buffer(*ackMsg), this->recFromEndpoint,
+											boost::bind(&MessageHandler::handle_send_to, this, ackMsg,
+													boost::asio::placeholders::error,
+													boost::asio::placeholders::bytes_transferred));
+
 				}
 			}
 
@@ -117,12 +141,11 @@ void MessageHandler::handle_receive_from(const boost::system::error_code& error,
 		else if(msgwrap.has_ackmsg())
 		{
 			const ::Network::AckMsg& ackmsg=msgwrap.ackmsg();
-			int msgID=(int)ackmsg.msgid();
-			std::map<int,Message>::iterator msgLookup=this->pendingMsgs.find(msgID);
-			debug<<"Got Ack from:"<<ackmsg.serverid()<<" for msgid:"<<msgID<<std::endl;
+			std::map<int,Message>::iterator msgLookup=this->pendingMsgs.find(ackmsg.msgid());
+			debug<<"Got Ack from:"<<ackmsg.serverid()<<" for msgid:"<<ackmsg.msgid()<<std::endl;
 			if(msgLookup == this->pendingMsgs.end())
 			{
-				debug<<"\tNo record of msgid:"<<msgID<<" ignoring"<<std::endl;
+				debug<<"\tNo record of msgid:"<<ackmsg.msgid()<<" ignoring"<<std::endl;
 				return;
 			}
 
@@ -130,7 +153,7 @@ void MessageHandler::handle_receive_from(const boost::system::error_code& error,
 			pendmsg.recievedReply(ackmsg.serverid());
 			if(pendmsg.allRepliesRec())
 			{
-				debug<<"\tLast ack for msgid:"<<msgID<<" removing from pending list"<<std::endl;
+				debug<<"\tLast ack for msgid:"<<ackmsg.msgid()<<" removing from pending list"<<std::endl;
 				this->pendingMsgs.erase(msgLookup);
 			}
 		}
@@ -154,9 +177,11 @@ void MessageHandler::handle_timeout(const boost::system::error_code& error)
 
 void MessageHandler::asynchWaitForData()
 {
+	boost::shared_array<char> buffer(new char[DATA_MAX_LENGTH]);
 	socket_.async_receive_from(
-			boost::asio::buffer(data_, DATA_MAX_LENGTH), this->recFromEndpoint,
+			boost::asio::buffer(buffer.get(), DATA_MAX_LENGTH), this->recFromEndpoint,
 			boost::bind(&MessageHandler::handle_receive_from, this,
+					buffer,
 					boost::asio::placeholders::error,
 					boost::asio::placeholders::bytes_transferred));
 }
@@ -175,12 +200,10 @@ void MessageHandler::stopHandler()
 MessageHandler::Message::Message(const std::string& message, VectorClock& vectorClock, const std::set<std::string>& cliqueIDs):numRetries(0)
 {
 	for(std::set<std::string>::iterator it=cliqueIDs.begin(); it!= cliqueIDs.end();it++)
-		this->msg.add_cliqueids(*it);
-	this->msg.set_clientmsg(message);
-	this->msg.set_vectorclock(vectorClock.encodeClock());
-	this->msg.set_msgid(vectorClock.getMyTime());
-
-
+		this->msg.mutable_datamsg()->add_cliqueids(*it);
+	this->msg.mutable_datamsg()->set_clientmsg(message);
+	this->msg.mutable_datamsg()->set_vectorclock(vectorClock.encodeClock());
+	this->msg.mutable_datamsg()->set_msgid(vectorClock.getMyTime());
 }
 MessageHandler::Message::Message()
 {
@@ -188,7 +211,7 @@ MessageHandler::Message::Message()
 
 void MessageHandler::Message::recievedReply(const std::string& nodeID)
 {
-	google::protobuf::RepeatedPtrField< ::google::protobuf::string >* mutableIDs=this->msg.mutable_cliqueids();
+	google::protobuf::RepeatedPtrField< ::google::protobuf::string >* mutableIDs=this->msg.mutable_datamsg()->mutable_cliqueids();
 
 	int index=0;
 	for(google::protobuf::RepeatedPtrField< ::google::protobuf::string >::iterator it=mutableIDs->begin();
@@ -205,7 +228,7 @@ void MessageHandler::Message::recievedReply(const std::string& nodeID)
 }
 bool MessageHandler::Message::allRepliesRec() const
 {
-	return this->msg.cliqueids().size()<=0;
+	return this->msg.datamsg().cliqueids().size()<=0;
 }
 int MessageHandler::Message::getNumRetries() const
 {
@@ -213,15 +236,17 @@ int MessageHandler::Message::getNumRetries() const
 }
 int MessageHandler::Message::getID() const
 {
-	return this->msg.msgid();
+	return this->msg.datamsg().msgid();
 }
 void MessageHandler::Message::incNumRetries()
 {
 	this->numRetries++;
 }
-std::string  MessageHandler::Message::toBuffer() const
+const std::string& MessageHandler::Message::getMessage()
 {
-	::Network::MsgWrapper wrap;
-	wrap.mutable_datamsg()->CopyFrom(this->msg);
-	return wrap.SerializeAsString();
+	return this->msg.datamsg().clientmsg();
+}
+const std::string  MessageHandler::Message::toBuffer() const
+{
+	return this->msg.SerializeAsString();
 }

@@ -20,6 +20,9 @@
 #include <boost/asio.hpp>
 #include <boost/scoped_ptr.hpp>
 #include <boost/bind.hpp>
+#include <boost/shared_ptr.hpp>
+#include <boost/shared_array.hpp>
+#include <boost/make_shared.hpp>
 #include <string>
 #include <set>
 #include <string>
@@ -30,6 +33,7 @@
 class MessageHandler
 {
 public:
+	static const int DATA_MAX_LENGTH = 1024;
 	class MessageHandlerCallback
 	{
 	public:
@@ -42,8 +46,10 @@ public:
 	void sendMessage(const std::string& message);
 
 
-	void handle_send_to(const boost::system::error_code& error);
-	void handle_receive_from(const boost::system::error_code& error,size_t bytes_recvd);
+	void handle_send_to(boost::shared_ptr<std::string> message,
+		      const boost::system::error_code& error,
+		      std::size_t bytes_sent);
+	void handle_receive_from(boost::shared_array<char> data,const boost::system::error_code& error,size_t bytes_recvd);
 	void handle_timeout(const boost::system::error_code& error);
 
 	void startHandler();
@@ -61,7 +67,8 @@ private:
 		int getNumRetries() const;
 		int getID() const;
 		void incNumRetries();
-		std::string toBuffer() const;
+		const std::string& getMessage();
+		const std::string toBuffer() const;
 
 		inline bool operator==(const Message& other) const {return this->getID()==other.getID(); }
 		inline bool operator!=(const Message& other) const {return !this->operator==(other);}
@@ -73,8 +80,7 @@ private:
 
 
 	private:
-
-		::Network::DataPassMsg msg;
+		::Network::MsgWrapper msg;
 		int numRetries;
 
 	};
@@ -86,8 +92,8 @@ private:
 	boost::asio::ip::udp::socket socket_;
 	boost::asio::deadline_timer timer_;
 
-	static const int DATA_MAX_LENGTH = 1024;
-	char data_[DATA_MAX_LENGTH];//buffer to store data in
+
+//	char data_[DATA_MAX_LENGTH];//buffer to store data in
 
 	std::map<int,Message> pendingMsgs;
 	VectorClock myClock;
