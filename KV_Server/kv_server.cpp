@@ -42,15 +42,15 @@ int main(int argc, char** argv)
 	char* mcastIP= argv[2];
 	unsigned short mcastPort=boost::lexical_cast<unsigned short>(argv[3]);
 	KVServer kvstore(serverID, mcastIP, mcastPort);
-//	if(serverID[0]!='1')
-//	{
-		for(int i=0; i<10; i++)
+	if(serverID[0]!='1')
+	{
+		for(int i=0; i<2; i++)
 		{
 			std::stringstream key;
 			key<<"test"<<i;
 			kvstore.put(key.str(), "test");
 		}
-//	}
+	}
 	kvstore.start();
 
 }

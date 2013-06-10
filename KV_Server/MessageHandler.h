@@ -37,7 +37,7 @@ class MessageHandler
 {
 public:
 	static const int DATA_MAX_LENGTH = 1024;
-	static const int MAX_TIME_BEFORE_RESEND_SEC=1;
+	static const int MAX_TIME_BEFORE_RESEND_SEC=3;
 	static const int MAX_MSG_SEND_RETRIES=3;
 	class MessageHandlerCallback
 	{
@@ -101,7 +101,7 @@ private:
 		time_t lastRetried;
 	};
 	MessageHandler::MessageHandlerCallback& msgRevCallback;
-	void asynchSetTimmer();
+	void setPendingMessageRetryTimer();
 	void asynchWaitForData();
 	void sendMessage(const DataMessage& msg, const boost::asio::ip::udp::endpoint& destination);
 	void sendMessage(const ::Network::MsgWrapper& msg, const boost::asio::ip::udp::endpoint& destination);

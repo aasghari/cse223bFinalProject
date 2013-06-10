@@ -59,9 +59,6 @@ void MessageHandler::sendMessage(const std::string& message)
 	DataMessage msg(message, ++this->myClock,this->currentClique);
 	const MessageHandler::DataMessage& addedMsg=this->pendingMsgs[msg.getID()]=msg;
 	this->sendMessage(addedMsg,sendToEndpoint);
-	this->asynchSetTimmer();
-
-
 }
 void MessageHandler::sendMessage(const ::Network::MsgWrapper& msg, const boost::asio::ip::udp::endpoint& destination)
 {
@@ -99,16 +96,14 @@ void MessageHandler::handle_send_to(boost::shared_ptr<std::string> message,
 		debug<<"Successfully sent message:"<<dbgmsg.str()<<std::endl;
 
 	}
-	else
-	{
-		//TODO resend the message
-	}
 	this->asynchWaitForData();
+	this->setPendingMessageRetryTimer();
 }
 
 void MessageHandler::handle_receive_from(boost::shared_array<char> data,const boost::system::error_code& error,
 		size_t bytes_recvd)
 {
+
 	if (error)
 	{
 		debug<<"Got Error:"<<error<<std::endl;
@@ -175,50 +170,57 @@ void MessageHandler::handle_receive_from(boost::shared_array<char> data,const bo
 }
 void MessageHandler::handle_timeout(const boost::system::error_code& error)
 {
-
-
-	if (!error)
+	if(!error)
 	{
 		debug<<"Timer went off"<<std::endl;
-		//TODO resend the message if not all members of clique have replied
-		for(std::map<int,DataMessage>::iterator it=this->pendingMsgs.begin();
-				it!=this->pendingMsgs.end(); it++)
-		{
-			DataMessage& msg=it->second;
-			time_t lastChecked=msg.getLastRetried();
-			double timeDiff=difftime(time(NULL),lastChecked);
-			if(timeDiff>this->MAX_TIME_BEFORE_RESEND_SEC)
-			{
-
-				if(msg.incNumRetries()<=MAX_MSG_SEND_RETRIES)
-				{
-					//If we haven't exhausted our retries, try sending agian
-					debug<<"Resedning "<<msg.toString()<<std::endl;
-					this->sendMessage(msg,this->sendToEndpoint);
-				}
-				else
-				{
-					//If we have, give up, retrying
-					this->pendingMsgs.erase(msg.getID());
-				}
-
-			}
-		}
 	}
 	else
 	{
 		debug<<"Timer went off with error:"<<error.message()<<std::endl;
 	}
-	if(this->pendingMsgs.size()>0)
-				this->asynchSetTimmer();
+
+	//TODO resend the message if not all members of clique have replied
+	for(std::map<int,DataMessage>::iterator it=this->pendingMsgs.begin();
+			it!=this->pendingMsgs.end();/*not incremented*/)
+	{
+		DataMessage& msg=it->second;
+		time_t lastChecked=msg.getLastRetried();
+		double timeDiff=difftime(time(NULL),lastChecked);
+		if(timeDiff>this->MAX_TIME_BEFORE_RESEND_SEC)
+		{
+
+			if(msg.incNumRetries()<=MAX_MSG_SEND_RETRIES)
+			{
+				//If we haven't exhausted our retries, try sending agian
+				debug<<"Resedning "<<msg.toString()<<std::endl;
+				this->sendMessage(msg,this->sendToEndpoint);
+				++it;
+			}
+			else
+			{
+				//If we have, give up, retrying
+				this->pendingMsgs.erase(it++);
+			}
+		}
+	}
+
 	this->asynchWaitForData();
+	this->setPendingMessageRetryTimer();
+
 }
-void MessageHandler::asynchSetTimmer()
+void MessageHandler::setPendingMessageRetryTimer()
 {
-	this->timer_.expires_from_now(
-			boost::posix_time::seconds(MessageHandler::MAX_TIME_BEFORE_RESEND_SEC));
-	this->timer_.async_wait(boost::bind(&MessageHandler::handle_timeout, this,
-            boost::asio::placeholders::error));
+
+	if(this->pendingMsgs.size()>0)
+	{
+		if (timer_.expires_at() <= ::boost::asio::deadline_timer::traits_type::now())
+		{
+			this->timer_.expires_from_now(
+					boost::posix_time::seconds(MessageHandler::MAX_TIME_BEFORE_RESEND_SEC));
+			this->timer_.async_wait(boost::bind(&MessageHandler::handle_timeout, this,
+				boost::asio::placeholders::error));
+		}
+	}
 }
 void MessageHandler::asynchWaitForData()
 {
@@ -233,8 +235,8 @@ void MessageHandler::asynchWaitForData()
 
 void MessageHandler::startHandler()
 {
+	timer_.expires_from_now(boost::posix_time::seconds(0));
 	this->asynchWaitForData();
-
 	this->io_service.run();
 }
 void MessageHandler::stopHandler()
