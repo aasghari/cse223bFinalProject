@@ -7,7 +7,8 @@
 #include <boost/lexical_cast.hpp>
 #include "kv_store.h"
 #include "MessageHandler.h"
-class KVServer: public MessageHandler::MessageHandlerCallback
+class KVServer: public MessageHandler::MessageRecievedCallback,
+				public MessageHandler::RetryFailureCallback
 {
 	KeyValueStore myMap;
 	MessageHandler net;
@@ -15,11 +16,16 @@ public:
 	KVServer(std::string serverID, const char* multicastIP, unsigned short multicastPort)
 		:myMap(serverID), net(multicastIP,multicastPort, *this,serverID)
 	{
-
+		net.setRetryFailureCallback(*this);
 	}
 	void handleMessage(const char* message, size_t numBytes)
 	{
 		debug<<"handleMessage: "<<message<<" num bytes:"<<numBytes<<std::endl;
+	}
+	void handleRetryFailure(const char* message, size_t numBytes)
+	{
+		debug<<"retries failed. shuting down: "<<message<<" num bytes:"<<numBytes<<std::endl;
+		net.stopHandler();
 	}
 
 	void start()

@@ -7,8 +7,8 @@
 
 #include "MessageHandler.h"
 
-MessageHandler::MessageHandler(	const char* multicast_address,const short multicast_port,MessageHandler::MessageHandlerCallback& callback,std::string& serverID) :
-	msgRevCallback(callback),
+MessageHandler::MessageHandler(	const char* multicast_address,const short multicast_port,MessageHandler::MessageRecievedCallback& callback,std::string& serverID) :
+	msgRevCallback(callback),retryFailueCallback(NULL),
 	sendToEndpoint(boost::asio::ip::address::from_string(multicast_address), multicast_port),
 	socket_(io_service),timer_(io_service),
 	myClock(serverID),serverID(serverID),bytesSent(0), bytesRec(0), msgsSent(0), msgsRec(0)
@@ -45,6 +45,10 @@ MessageHandler::MessageHandler(	const char* multicast_address,const short multic
 MessageHandler::~MessageHandler()
 {
 	this->stopHandler();
+}
+void MessageHandler::setRetryFailureCallback(MessageHandler::RetryFailureCallback& retFailCB)
+{
+	this->retryFailueCallback=&retFailCB;
 }
 void MessageHandler::sendMessage(const char* message)
 {
@@ -96,7 +100,6 @@ void MessageHandler::handle_send_to(boost::shared_ptr<std::string> message,
 		debug<<"Successfully sent message:"<<dbgmsg.str()<<std::endl;
 
 	}
-	this->asynchWaitForData();
 	this->setPendingMessageRetryTimer();
 }
 
@@ -106,7 +109,7 @@ void MessageHandler::handle_receive_from(boost::shared_array<char> data,const bo
 
 	if (error)
 	{
-		debug<<"Got Error:"<<error<<std::endl;
+		debug<<"Got Error recieving data:"<<error<<std::endl;
 		return; //Silently drop all errors
 	}
 	else
@@ -198,13 +201,19 @@ void MessageHandler::handle_timeout(const boost::system::error_code& error)
 			}
 			else
 			{
+				debug<<"Msg retries exhausted. Giving up:"<<msg.toString()<<std::endl;
+				if(retryFailueCallback!=NULL)
+				{
+					retryFailueCallback->handleRetryFailure(msg.getMessage().data(),
+							msg.getMessage().size());
+				}
 				//If we have, give up, retrying
 				this->pendingMsgs.erase(it++);
 			}
 		}
 	}
 
-	this->asynchWaitForData();
+
 	this->setPendingMessageRetryTimer();
 
 }
@@ -242,6 +251,8 @@ void MessageHandler::startHandler()
 void MessageHandler::stopHandler()
 {
 	this->io_service.stop();
+	this->socket_.close();
+	this->io_service.reset();
 }
 
 MessageHandler::DataMessage::DataMessage(const std::string& message, VectorClock& vectorClock, const std::set<std::string>& cliqueIDs):

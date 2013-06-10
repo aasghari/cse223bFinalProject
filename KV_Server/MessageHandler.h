@@ -39,13 +39,19 @@ public:
 	static const int DATA_MAX_LENGTH = 1024;
 	static const int MAX_TIME_BEFORE_RESEND_SEC=3;
 	static const int MAX_MSG_SEND_RETRIES=3;
-	class MessageHandlerCallback
+	class MessageRecievedCallback
 	{
 	public:
 		virtual void handleMessage(const char* message, size_t numBytes)=0;
 	};
+	class RetryFailureCallback
+	{
+	public:
+		virtual void handleRetryFailure(const char* message, size_t numBytes)=0;
+	};
 public:
-	MessageHandler(	const char* multicast_address, const short multicast_port,MessageHandler::MessageHandlerCallback& callback, std::string& serverID );
+	MessageHandler(	const char* multicast_address, const short multicast_port,MessageHandler::MessageRecievedCallback& callback, std::string& serverID );
+	void setRetryFailureCallback(MessageHandler::RetryFailureCallback& retFailCB);
 	virtual ~MessageHandler();
 	void sendMessage(const char* message);
 	void sendMessage(const std::string& message);
@@ -100,7 +106,8 @@ private:
 		int numRetries;
 		time_t lastRetried;
 	};
-	MessageHandler::MessageHandlerCallback& msgRevCallback;
+	MessageHandler::MessageRecievedCallback& msgRevCallback;
+	MessageHandler::RetryFailureCallback* retryFailueCallback;
 	void setPendingMessageRetryTimer();
 	void asynchWaitForData();
 	void sendMessage(const DataMessage& msg, const boost::asio::ip::udp::endpoint& destination);
