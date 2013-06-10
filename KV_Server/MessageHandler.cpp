@@ -56,15 +56,26 @@ void MessageHandler::sendMessage(const std::string& message)
 	this->bytesSent += message.size();
 
 
-	Message msg(message, ++this->myClock,this->currentClique);
-	const MessageHandler::Message& addedMsg=this->pendingMsgs[msg.getID()]=msg;
-	debug<<"sending msg:"<<addedMsg.getID()<<" to:"<<sendToEndpoint.address().to_string()<<std::endl;
+	DataMessage msg(message, ++this->myClock,this->currentClique);
+	const MessageHandler::DataMessage& addedMsg=this->pendingMsgs[msg.getID()]=msg;
+	this->sendMessage(addedMsg,sendToEndpoint);
+	this->asynchSetTimmer();
 
-	boost::shared_ptr<std::string> msgShardPtr(new std::string(addedMsg.toBuffer()));
-	socket_.async_send_to(boost::asio::buffer(*msgShardPtr), sendToEndpoint,
+
+}
+void MessageHandler::sendMessage(const ::Network::MsgWrapper& msg, const boost::asio::ip::udp::endpoint& destination)
+{
+	boost::shared_ptr<std::string> msgShardPtr(new std::string(msg.SerializeAsString()));
+	socket_.async_send_to(boost::asio::buffer(*msgShardPtr), destination,
 			boost::bind(&MessageHandler::handle_send_to, this, msgShardPtr,
 		            boost::asio::placeholders::error,
 		            boost::asio::placeholders::bytes_transferred));
+
+}
+void MessageHandler::sendMessage(const DataMessage& msg, const boost::asio::ip::udp::endpoint& destination)
+{
+	debug<<"sending msg:"<<msg.getID()<<" to:"<<destination.address().to_string()<<std::endl;
+	sendMessage(msg.getMsgAsProto(), destination);
 }
 void MessageHandler::handle_send_to(boost::shared_ptr<std::string> message,
 	      const boost::system::error_code& error,
@@ -76,7 +87,7 @@ void MessageHandler::handle_send_to(boost::shared_ptr<std::string> message,
 
 	if(wrap.has_ackmsg())
 	{
-		dbgmsg << "Sending Ack for message"<<wrap.ackmsg().msgid();
+		dbgmsg << "Sending Ack for message:"<<wrap.ackmsg().msgid();
 	}
 
 	if(wrap.has_datamsg())
@@ -113,6 +124,7 @@ void MessageHandler::handle_receive_from(boost::shared_array<char> data,const bo
 		if(msgwrap.has_datamsg())
 		{
 			const ::Network::DataPassMsg& datamsg=msgwrap.datamsg();
+			this->log.insert(DataMessage(msgwrap));
 			this->msgRevCallback.handleMessage(datamsg.clientmsg().data(), datamsg.clientmsg().size());
 
 
@@ -127,12 +139,7 @@ void MessageHandler::handle_receive_from(boost::shared_array<char> data,const bo
 					ackWrap.mutable_ackmsg()->set_vectorclock(this->myClock.encodeClock());
 					debug<<"\tthis serverID:"<<this->serverID<<" is in the requested clique. Sending reply to:"<<
 							this->recFromEndpoint.address().to_string()<<std::endl;
-
-					boost::shared_ptr<std::string> ackMsg(new std::string(ackWrap.SerializeAsString()));
-					socket_.async_send_to(boost::asio::buffer(*ackMsg), this->recFromEndpoint,
-											boost::bind(&MessageHandler::handle_send_to, this, ackMsg,
-													boost::asio::placeholders::error,
-													boost::asio::placeholders::bytes_transferred));
+					this->sendMessage(ackWrap,this->recFromEndpoint);
 
 				}
 			}
@@ -141,7 +148,7 @@ void MessageHandler::handle_receive_from(boost::shared_array<char> data,const bo
 		else if(msgwrap.has_ackmsg())
 		{
 			const ::Network::AckMsg& ackmsg=msgwrap.ackmsg();
-			std::map<int,Message>::iterator msgLookup=this->pendingMsgs.find(ackmsg.msgid());
+			std::map<int,DataMessage>::iterator msgLookup=this->pendingMsgs.find(ackmsg.msgid());
 			debug<<"Got Ack from:"<<ackmsg.serverid()<<" for msgid:"<<ackmsg.msgid()<<std::endl;
 			if(msgLookup == this->pendingMsgs.end())
 			{
@@ -149,7 +156,7 @@ void MessageHandler::handle_receive_from(boost::shared_array<char> data,const bo
 				return;
 			}
 
-			Message& pendmsg=msgLookup->second;
+			DataMessage& pendmsg=msgLookup->second;
 			pendmsg.recievedReply(ackmsg.serverid());
 			if(pendmsg.allRepliesRec())
 			{
@@ -168,13 +175,51 @@ void MessageHandler::handle_receive_from(boost::shared_array<char> data,const bo
 }
 void MessageHandler::handle_timeout(const boost::system::error_code& error)
 {
+
+
 	if (!error)
 	{
+		debug<<"Timer went off"<<std::endl;
 		//TODO resend the message if not all members of clique have replied
+		for(std::map<int,DataMessage>::iterator it=this->pendingMsgs.begin();
+				it!=this->pendingMsgs.end(); it++)
+		{
+			DataMessage& msg=it->second;
+			time_t lastChecked=msg.getLastRetried();
+			double timeDiff=difftime(time(NULL),lastChecked);
+			if(timeDiff>this->MAX_TIME_BEFORE_RESEND_SEC)
+			{
+
+				if(msg.incNumRetries()<=MAX_MSG_SEND_RETRIES)
+				{
+					//If we haven't exhausted our retries, try sending agian
+					debug<<"Resedning "<<msg.toString()<<std::endl;
+					this->sendMessage(msg,this->sendToEndpoint);
+				}
+				else
+				{
+					//If we have, give up, retrying
+					this->pendingMsgs.erase(msg.getID());
+				}
+
+			}
+		}
 	}
+	else
+	{
+		debug<<"Timer went off with error:"<<error.message()<<std::endl;
+	}
+	if(this->pendingMsgs.size()>0)
+				this->asynchSetTimmer();
 	this->asynchWaitForData();
 }
-
+void MessageHandler::asynchSetTimmer()
+{
+	this->timer_.expires_from_now(
+			boost::posix_time::seconds(MessageHandler::MAX_TIME_BEFORE_RESEND_SEC));
+	this->timer_.async_wait(boost::bind(&MessageHandler::handle_timeout, this,
+            boost::asio::placeholders::error));
+}
 void MessageHandler::asynchWaitForData()
 {
 	boost::shared_array<char> buffer(new char[DATA_MAX_LENGTH]);
@@ -197,7 +242,8 @@ void MessageHandler::stopHandler()
 	this->io_service.stop();
 }
 
-MessageHandler::Message::Message(const std::string& message, VectorClock& vectorClock, const std::set<std::string>& cliqueIDs):numRetries(0)
+MessageHandler::DataMessage::DataMessage(const std::string& message, VectorClock& vectorClock, const std::set<std::string>& cliqueIDs):
+		numRetries(0), lastRetried(time(NULL))
 {
 	for(std::set<std::string>::iterator it=cliqueIDs.begin(); it!= cliqueIDs.end();it++)
 		this->msg.mutable_datamsg()->add_cliqueids(*it);
@@ -205,11 +251,18 @@ MessageHandler::Message::Message(const std::string& message, VectorClock& vector
 	this->msg.mutable_datamsg()->set_vectorclock(vectorClock.encodeClock());
 	this->msg.mutable_datamsg()->set_msgid(vectorClock.getMyTime());
 }
-MessageHandler::Message::Message()
+MessageHandler::DataMessage::DataMessage(const ::Network::MsgWrapper& msg):msg(msg)
 {
 }
+MessageHandler::DataMessage::DataMessage()
+{
+}
+const ::Network::MsgWrapper& MessageHandler::DataMessage::getMsgAsProto() const
+{
+	return this->msg;
+}
 
-void MessageHandler::Message::recievedReply(const std::string& nodeID)
+void MessageHandler::DataMessage::recievedReply(const std::string& nodeID)
 {
 	google::protobuf::RepeatedPtrField< ::google::protobuf::string >* mutableIDs=this->msg.mutable_datamsg()->mutable_cliqueids();
 
@@ -226,27 +279,47 @@ void MessageHandler::Message::recievedReply(const std::string& nodeID)
 	}
 
 }
-bool MessageHandler::Message::allRepliesRec() const
+time_t MessageHandler::DataMessage::getLastRetried() const
+{
+	return this->lastRetried;
+}
+bool MessageHandler::DataMessage::allRepliesRec() const
 {
 	return this->msg.datamsg().cliqueids().size()<=0;
 }
-int MessageHandler::Message::getNumRetries() const
+int MessageHandler::DataMessage::getNumRetries() const
 {
 	return this->numRetries;
 }
-int MessageHandler::Message::getID() const
+int MessageHandler::DataMessage::getID() const
 {
 	return this->msg.datamsg().msgid();
 }
-void MessageHandler::Message::incNumRetries()
+int MessageHandler::DataMessage::incNumRetries()
 {
-	this->numRetries++;
+	this->lastRetried=time(NULL);
+	return ++this->numRetries;
 }
-const std::string& MessageHandler::Message::getMessage()
+VectorClock MessageHandler::DataMessage::getVectorClock() const
+{
+	return this->msg.datamsg().vectorclock();
+}
+const std::string& MessageHandler::DataMessage::getMessage()
 {
 	return this->msg.datamsg().clientmsg();
 }
-const std::string  MessageHandler::Message::toBuffer() const
+std::string MessageHandler::DataMessage::toString()
 {
-	return this->msg.SerializeAsString();
+	std::stringstream os;
+	if(this->getMsgAsProto().has_ackmsg())
+	{
+		os << "Ack for message"<<this->msg.ackmsg().msgid();
+	}
+
+	if(this->getMsgAsProto().has_datamsg())
+	{
+		os<<"data msgid:"<<this->msg.datamsg().msgid()<<" msg:"<<this->msg.datamsg().clientmsg();
+	}
+	os<<" retries:"<<this->getNumRetries()<<" lastRetried:"<<this->getLastRetried();
+	return os.str();
 }

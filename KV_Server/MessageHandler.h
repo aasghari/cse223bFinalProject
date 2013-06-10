@@ -23,6 +23,7 @@
 #include <boost/shared_ptr.hpp>
 #include <boost/shared_array.hpp>
 #include <boost/make_shared.hpp>
+#include <boost/date_time/posix_time/posix_time_types.hpp>
 #include <string>
 #include <set>
 #include <string>
@@ -30,10 +31,14 @@
 #include "debug.h"
 #include "messages.pb.h"
 #include "VectorClock.hpp"
+
+
 class MessageHandler
 {
 public:
 	static const int DATA_MAX_LENGTH = 1024;
+	static const int MAX_TIME_BEFORE_RESEND_SEC=1;
+	static const int MAX_MSG_SEND_RETRIES=3;
 	class MessageHandlerCallback
 	{
 	public:
@@ -57,35 +62,49 @@ public:
 
 private:
 
-	class Message
+	class DataMessage
 	{
+		friend class MessageHandler;
+
+		const ::Network::MsgWrapper& getMsgAsProto() const;
 	public:
-		Message(const std::string& message, VectorClock& vectorClock, const std::set<std::string>& cliqueIDs);
-		Message();//dummy ctor for look ups;
+		DataMessage(const std::string& message, VectorClock& vectorClock, const std::set<std::string>& cliqueIDs);
+		DataMessage(const ::Network::MsgWrapper& msg);
+		DataMessage();//dummy ctor for look ups;
 		void recievedReply(const std::string& nodeID);
 		bool allRepliesRec() const;
 		int getNumRetries() const;
 		int getID() const;
-		void incNumRetries();
+		time_t getLastRetried() const;
+		int incNumRetries();
+		VectorClock getVectorClock() const;
 		const std::string& getMessage();
-		const std::string toBuffer() const;
-
-		inline bool operator==(const Message& other) const {return this->getID()==other.getID(); }
-		inline bool operator!=(const Message& other) const {return !this->operator==(other);}
-		inline bool operator< (const Message& other) const {return this->getID()<other.getID();}
-		inline bool operator> (const Message& other) const {return  other.operator< (*this);}
-		inline bool operator<=(const Message& other) const {return !this->operator> (other);}
-		inline bool operator>=(const Message& other) const {return !this->operator< (other);}
 
 
+		std::string toString();
+		inline bool operator==(const DataMessage& other) const {return this->getID()==other.getID(); }
+		inline bool operator!=(const DataMessage& other) const {return !this->operator==(other);}
+		inline bool operator< (const DataMessage& other) const {return this->getID()<other.getID();}
+		inline bool operator> (const DataMessage& other) const {return  other.operator< (*this);}
+		inline bool operator<=(const DataMessage& other) const {return !this->operator> (other);}
+		inline bool operator>=(const DataMessage& other) const {return !this->operator< (other);}
+
+		class DatamsgVectorClockComp
+		{
+		public:
+			inline bool operator()(const DataMessage& rhs,const DataMessage& lhs) const {return rhs.getVectorClock()<lhs.getVectorClock(); }
+		};
 
 	private:
 		::Network::MsgWrapper msg;
 		int numRetries;
-
+		time_t lastRetried;
 	};
 	MessageHandler::MessageHandlerCallback& msgRevCallback;
+	void asynchSetTimmer();
 	void asynchWaitForData();
+	void sendMessage(const DataMessage& msg, const boost::asio::ip::udp::endpoint& destination);
+	void sendMessage(const ::Network::MsgWrapper& msg, const boost::asio::ip::udp::endpoint& destination);
 	boost::asio::io_service io_service;
 	boost::asio::ip::udp::endpoint sendToEndpoint;
 	boost::asio::ip::udp::endpoint recFromEndpoint;
@@ -95,7 +114,8 @@ private:
 
 //	char data_[DATA_MAX_LENGTH];//buffer to store data in
 
-	std::map<int,Message> pendingMsgs;
+	std::map<int,DataMessage> pendingMsgs;
+	std::set<DataMessage, DataMessage::DatamsgVectorClockComp> log;
 	VectorClock myClock;
 	std::set< std::string> currentClique;
 	const std::string serverID;
@@ -105,5 +125,4 @@ private:
 	int msgsRec;//track number of messages recieved
 
 };
-
 #endif /* MULTICASTHANDLER_H_ */
