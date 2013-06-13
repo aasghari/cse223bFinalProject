@@ -12,7 +12,7 @@ MessageHandler::MessageHandler(	const char* multicast_address,const short multic
 		MessageHandler::MessageRecievedCallback& callback,std::string& serverID) :
 		msgRevCallback(callback),retryFailueCallback(NULL),
 	sendToEndpoint(boost::asio::ip::address::from_string(multicast_address), multicast_port),
-	socket_(io_service),timer_(io_service),
+	socket_(io_service),resendTimer(io_service),missingDataTimer(io_service),
 	myClock(serverID),currentClique(clique),serverID(serverID),bytesSent(0), bytesRec(0), msgsSent(0), msgsRec(0)
 {
 	boost::asio::ip::udp::endpoint listen_endpoint;
@@ -63,8 +63,8 @@ void MessageHandler::sendMessage(const std::string& message)
 
 	DataMessage msg(message, ++this->myClock,this->currentClique);
 	const DataMessage& sendMsg=this->currentClique.size()>0?this->pendingMsgs[msg.getID()]=msg:msg;
-	if(this->myClock.getMyTime()<8)
-		return;
+//	if(this->myClock.getMyTime()<8)
+//		return;
 	this->sendMessage(sendMsg,sendToEndpoint);
 }
 void MessageHandler::sendMessage(const ::Network::MsgWrapper& msg, const boost::asio::ip::udp::endpoint& destination)
@@ -123,10 +123,17 @@ void MessageHandler::handle_receive_from(boost::shared_array<char> data,const bo
 		::Network::MsgWrapper msgwrap;
 		msgwrap.ParseFromArray(data.get(), bytes_recvd);
 		VectorClock recMsgClock=VectorClock::decode(msgwrap.vectorclock());
+		//If there is more than one outstanding difference, we are missing data!
 		int diffCount=0;
 		if((diffCount=this->myClock.clockDiffs(recMsgClock))>1)
 		{
 			debug<<"Higher than one diff:"<<diffCount<<"...missing data"<<std::endl;
+			this->setPendingMissingMessageTimer();
+		}
+		else
+		{
+			//clocks are off by only one (ie this message we are processing) merge the clocks
+			this->myClock.merge(recMsgClock);
 		}
 		if(msgwrap.has_datamsg())
 		{
@@ -182,15 +189,26 @@ void MessageHandler::handle_receive_from(boost::shared_array<char> data,const bo
 	this->asynchWaitForData();
 
 }
-void MessageHandler::handle_timeout(const boost::system::error_code& error)
+void MessageHandler::handle_missingData(const boost::system::error_code& error)
 {
 	if(!error)
 	{
-		debug<<"Timer went off"<<std::endl;
+		debug<<"Missing Data Timer went off"<<std::endl;
 	}
 	else
 	{
-		debug<<"Timer went off with error:"<<error.message()<<std::endl;
+		debug<<"Missing Data Timer went off with error:"<<error.message()<<std::endl;
+	}
+}
+void MessageHandler::handle_resendTimeout(const boost::system::error_code& error)
+{
+	if(!error)
+	{
+		debug<<"Resend Timer went off"<<std::endl;
+	}
+	else
+	{
+		debug<<"Resend Timer went off with error:"<<error.message()<<std::endl;
 	}
 
 	//TODO resend the message if not all members of clique have replied
@@ -230,16 +248,27 @@ void MessageHandler::handle_timeout(const boost::system::error_code& error)
 }
 void MessageHandler::setPendingMessageRetryTimer()
 {
-
 	if(this->pendingMsgs.size()>0)
 	{
-		if (timer_.expires_at() <= ::boost::asio::deadline_timer::traits_type::now())
+		//in expired in the past
+		if (resendTimer.expires_at() <= ::boost::asio::deadline_timer::traits_type::now())
 		{
-			this->timer_.expires_from_now(
+			this->resendTimer.expires_from_now(
 					boost::posix_time::seconds(MessageHandler::MAX_TIME_BEFORE_RESEND_SEC));
-			this->timer_.async_wait(boost::bind(&MessageHandler::handle_timeout, this,
+			this->resendTimer.async_wait(boost::bind(&MessageHandler::handle_resendTimeout, this,
 				boost::asio::placeholders::error));
 		}
+	}
+}
+void MessageHandler::setPendingMissingMessageTimer()
+{
+	//if expired in the past
+	if (this->missingDataTimer.expires_at() <= ::boost::asio::deadline_timer::traits_type::now())
+	{
+		this->missingDataTimer.expires_from_now(
+				boost::posix_time::seconds(MessageHandler::MAX_TIME_BEFORE_MISSING_DATA_REQUEST));
+		this->missingDataTimer.async_wait(boost::bind(&MessageHandler::handle_missingData, this,
+			boost::asio::placeholders::error));
 	}
 }
 void MessageHandler::asynchWaitForData()
@@ -255,7 +284,9 @@ void MessageHandler::asynchWaitForData()
 
 void MessageHandler::startHandler()
 {
-	timer_.expires_from_now(boost::posix_time::seconds(0));
+	//start the timers to expire now so we have a time set for last expiration.
+	resendTimer.expires_from_now(boost::posix_time::seconds(0));
+	missingDataTimer.expires_from_now(boost::posix_time::seconds(0));
 	this->asynchWaitForData();
 	this->io_service.run();
 }

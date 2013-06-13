@@ -38,6 +38,7 @@ class MessageHandler
 public:
 	static const int DATA_MAX_LENGTH = 1024;
 	static const int MAX_TIME_BEFORE_RESEND_SEC=3;
+	static const int MAX_TIME_BEFORE_MISSING_DATA_REQUEST=2;
 	static const int MAX_MSG_SEND_RETRIES=3;
 	class MessageRecievedCallback
 	{
@@ -62,8 +63,8 @@ public:
 		      const boost::system::error_code& error,
 		      std::size_t bytes_sent);
 	void handle_receive_from(boost::shared_array<char> data,const boost::system::error_code& error,size_t bytes_recvd);
-	void handle_timeout(const boost::system::error_code& error);
-
+	void handle_resendTimeout(const boost::system::error_code& error);
+	void handle_missingData(const boost::system::error_code& error);
 	void startHandler();
 	void stopHandler();
 
@@ -110,6 +111,7 @@ private:
 	MessageHandler::MessageRecievedCallback& msgRevCallback;
 	MessageHandler::RetryFailureCallback* retryFailueCallback;
 	void setPendingMessageRetryTimer();
+	void setPendingMissingMessageTimer();
 	void asynchWaitForData();
 	void sendMessage(const DataMessage& msg, const boost::asio::ip::udp::endpoint& destination);
 	void sendMessage(const ::Network::MsgWrapper& msg, const boost::asio::ip::udp::endpoint& destination);
@@ -117,7 +119,8 @@ private:
 	boost::asio::ip::udp::endpoint sendToEndpoint;
 	boost::asio::ip::udp::endpoint recFromEndpoint;
 	boost::asio::ip::udp::socket socket_;
-	boost::asio::deadline_timer timer_;
+	boost::asio::deadline_timer resendTimer;
+	boost::asio::deadline_timer missingDataTimer;
 
 
 //	char data_[DATA_MAX_LENGTH];//buffer to store data in
