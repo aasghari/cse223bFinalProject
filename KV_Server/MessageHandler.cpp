@@ -123,6 +123,7 @@ void MessageHandler::handle_receive_from(boost::shared_array<char> data,const bo
 		::Network::MsgWrapper msgwrap;
 		msgwrap.ParseFromArray(data.get(), bytes_recvd);
 		VectorClock recMsgClock=VectorClock::decode(msgwrap.vectorclock());
+
 		//If there is more than one outstanding difference, we are missing data!
 		int diffCount=0;
 		if((diffCount=this->myClock.clockDiffs(recMsgClock))>1)
