@@ -40,6 +40,7 @@ public:
 	static const int MAX_TIME_BEFORE_RESEND_SEC=3;
 	static const int MAX_TIME_BEFORE_MISSING_DATA_REQUEST=2;
 	static const int MAX_MSG_SEND_RETRIES=3;
+
 	class MessageRecievedCallback
 	{
 	public:

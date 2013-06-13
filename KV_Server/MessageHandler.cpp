@@ -134,6 +134,7 @@ void MessageHandler::handle_receive_from(boost::shared_array<char> data,const bo
 		{
 			//clocks are off by only one (ie this message we are processing) merge the clocks
 			this->myClock.merge(recMsgClock);
+
 		}
 		if(msgwrap.has_datamsg())
 		{
