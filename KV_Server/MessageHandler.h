@@ -128,6 +128,7 @@ private:
 //	char data_[DATA_MAX_LENGTH];//buffer to store data in
 
 	std::map<int,DataMessage> pendingMsgs;
+	std::map<VectorClock, boost::asio::ip::udp::endpoint> missingData;
 	std::set<DataMessage, DataMessage::DatamsgVectorClockComp> log;
 	VectorClock myClock;
 	std::set< std::string> currentClique;

@@ -129,12 +129,13 @@ void MessageHandler::handle_receive_from(boost::shared_array<char> data,const bo
 		if((diffCount=this->myClock.clockDiffs(recMsgClock))>1)
 		{
 			debug<<"Higher than one diff:"<<diffCount<<"...missing data"<<std::endl;
+			this->missingData[recMsgClock]=this->recFromEndpoint;
 			this->setPendingMissingMessageTimer();
 		}
 		else
 		{
 			//clocks are off by only one (ie this message we are processing) merge the clocks
-			this->myClock.merge(recMsgClock);
+			this->myClock.incrementByID(recMsgClock.getClockID());
 
 		}
 		if(msgwrap.has_datamsg())
@@ -195,6 +196,15 @@ void MessageHandler::handle_missingData(const boost::system::error_code& error)
 {
 	if(!error)
 	{
+		for(std::map<VectorClock, boost::asio::ip::udp::endpoint>::iterator missIT=this->missingData.begin();
+				missIT!=this->missingData.end(); missIT++)
+		{
+			//if not request it from clique
+			if(this->myClock.clockDiffs(missIT->first)>0)
+			{
+
+			}
+		}
 		debug<<"Missing Data Timer went off"<<std::endl;
 	}
 	else
@@ -264,13 +274,16 @@ void MessageHandler::setPendingMessageRetryTimer()
 }
 void MessageHandler::setPendingMissingMessageTimer()
 {
-	//if expired in the past
-	if (this->missingDataTimer.expires_at() <= ::boost::asio::deadline_timer::traits_type::now())
+	if(this->missingData.size()>0)
 	{
-		this->missingDataTimer.expires_from_now(
-				boost::posix_time::seconds(MessageHandler::MAX_TIME_BEFORE_MISSING_DATA_REQUEST));
-		this->missingDataTimer.async_wait(boost::bind(&MessageHandler::handle_missingData, this,
-			boost::asio::placeholders::error));
+		//if expired in the past
+		if (this->missingDataTimer.expires_at() <= ::boost::asio::deadline_timer::traits_type::now())
+		{
+			this->missingDataTimer.expires_from_now(
+					boost::posix_time::seconds(MessageHandler::MAX_TIME_BEFORE_MISSING_DATA_REQUEST));
+			this->missingDataTimer.async_wait(boost::bind(&MessageHandler::handle_missingData, this,
+				boost::asio::placeholders::error));
+		}
 	}
 }
 void MessageHandler::asynchWaitForData()
