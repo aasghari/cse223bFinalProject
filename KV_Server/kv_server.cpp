@@ -13,8 +13,8 @@ class KVServer: public MessageHandler::MessageRecievedCallback,
 	KeyValueStore myMap;
 	MessageHandler net;
 public:
-	KVServer(std::string serverID, const char* multicastIP, unsigned short multicastPort)
-		:myMap(serverID), net(multicastIP,multicastPort, *this,serverID)
+	KVServer(std::string serverID, const char* multicastIP, unsigned short multicastPort, const std::set<std::string>& clique)
+		:myMap(serverID), net(multicastIP,multicastPort, clique,*this,serverID)
 	{
 		net.setRetryFailureCallback(*this);
 	}
@@ -47,10 +47,15 @@ int main(int argc, char** argv)
 	char* serverID = argv[1];
 	char* mcastIP= argv[2];
 	unsigned short mcastPort=boost::lexical_cast<unsigned short>(argv[3]);
-	KVServer kvstore(serverID, mcastIP, mcastPort);
+	std::set<std::string> clique;
+	for(int i=4; i<argc; i++)
+	{
+		clique.insert(argv[i]);
+	}
+	KVServer kvstore(serverID, mcastIP, mcastPort,clique);
 	if(serverID[0]!='1')
 	{
-		for(int i=0; i<2; i++)
+		for(int i=0; i<10; i++)
 		{
 			std::stringstream key;
 			key<<"test"<<i;

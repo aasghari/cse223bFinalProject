@@ -7,13 +7,14 @@
 
 #include "MessageHandler.h"
 
-MessageHandler::MessageHandler(	const char* multicast_address,const short multicast_port,MessageHandler::MessageRecievedCallback& callback,std::string& serverID) :
-	msgRevCallback(callback),retryFailueCallback(NULL),
+MessageHandler::MessageHandler(	const char* multicast_address,const short multicast_port,
+		const std::set<std::string>& clique,
+		MessageHandler::MessageRecievedCallback& callback,std::string& serverID) :
+		msgRevCallback(callback),retryFailueCallback(NULL),
 	sendToEndpoint(boost::asio::ip::address::from_string(multicast_address), multicast_port),
 	socket_(io_service),timer_(io_service),
-	myClock(serverID),serverID(serverID),bytesSent(0), bytesRec(0), msgsSent(0), msgsRec(0)
+	myClock(serverID),currentClique(clique),serverID(serverID),bytesSent(0), bytesRec(0), msgsSent(0), msgsRec(0)
 {
-	this->currentClique.insert("1");
 	boost::asio::ip::udp::endpoint listen_endpoint;
 
 	if(sendToEndpoint.address().is_v4())
@@ -61,8 +62,10 @@ void MessageHandler::sendMessage(const std::string& message)
 
 
 	DataMessage msg(message, ++this->myClock,this->currentClique);
-	const MessageHandler::DataMessage& addedMsg=this->pendingMsgs[msg.getID()]=msg;
-	this->sendMessage(addedMsg,sendToEndpoint);
+	const DataMessage& sendMsg=this->currentClique.size()>0?this->pendingMsgs[msg.getID()]=msg:msg;
+	if(this->myClock.getMyTime()<8)
+		return;
+	this->sendMessage(sendMsg,sendToEndpoint);
 }
 void MessageHandler::sendMessage(const ::Network::MsgWrapper& msg, const boost::asio::ip::udp::endpoint& destination)
 {
@@ -119,6 +122,12 @@ void MessageHandler::handle_receive_from(boost::shared_array<char> data,const bo
 		//TODO do something with received data, maybe pass it off to application
 		::Network::MsgWrapper msgwrap;
 		msgwrap.ParseFromArray(data.get(), bytes_recvd);
+		VectorClock recMsgClock=VectorClock::decode(msgwrap.vectorclock());
+		int diffCount=0;
+		if((diffCount=this->myClock.clockDiffs(recMsgClock))>1)
+		{
+			debug<<"Higher than one diff:"<<diffCount<<"...missing data"<<std::endl;
+		}
 		if(msgwrap.has_datamsg())
 		{
 			const ::Network::DataPassMsg& datamsg=msgwrap.datamsg();
@@ -134,13 +143,14 @@ void MessageHandler::handle_receive_from(boost::shared_array<char> data,const bo
 					::Network::MsgWrapper ackWrap;
 					ackWrap.mutable_ackmsg()->set_serverid(this->serverID);
 					ackWrap.mutable_ackmsg()->set_msgid(datamsg.msgid());
-					ackWrap.mutable_ackmsg()->set_vectorclock(this->myClock.encodeClock());
+					ackWrap.set_vectorclock(this->myClock.encode());
 					debug<<"\tthis serverID:"<<this->serverID<<" is in the requested clique. Sending reply to:"<<
 							this->recFromEndpoint.address().to_string()<<std::endl;
 					this->sendMessage(ackWrap,this->recFromEndpoint);
 
 				}
 			}
+
 
 		}
 		else if(msgwrap.has_ackmsg())
@@ -166,6 +176,7 @@ void MessageHandler::handle_receive_from(boost::shared_array<char> data,const bo
 		{
 			debug<<"Unsupported msg type"<<std::endl;
 		}
+
 	}
 
 	this->asynchWaitForData();
@@ -261,8 +272,8 @@ MessageHandler::DataMessage::DataMessage(const std::string& message, VectorClock
 	for(std::set<std::string>::iterator it=cliqueIDs.begin(); it!= cliqueIDs.end();it++)
 		this->msg.mutable_datamsg()->add_cliqueids(*it);
 	this->msg.mutable_datamsg()->set_clientmsg(message);
-	this->msg.mutable_datamsg()->set_vectorclock(vectorClock.encodeClock());
 	this->msg.mutable_datamsg()->set_msgid(vectorClock.getMyTime());
+	this->msg.set_vectorclock(vectorClock.encode());
 }
 MessageHandler::DataMessage::DataMessage(const ::Network::MsgWrapper& msg):msg(msg)
 {
@@ -315,7 +326,7 @@ int MessageHandler::DataMessage::incNumRetries()
 }
 VectorClock MessageHandler::DataMessage::getVectorClock() const
 {
-	return this->msg.datamsg().vectorclock();
+	return this->msg.vectorclock();
 }
 const std::string& MessageHandler::DataMessage::getMessage()
 {

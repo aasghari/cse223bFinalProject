@@ -50,7 +50,8 @@ public:
 		virtual void handleRetryFailure(const char* message, size_t numBytes)=0;
 	};
 public:
-	MessageHandler(	const char* multicast_address, const short multicast_port,MessageHandler::MessageRecievedCallback& callback, std::string& serverID );
+	MessageHandler(	const char* multicast_address, const short multicast_port, const std::set<std::string>& clique,
+		MessageHandler::MessageRecievedCallback& callback, std::string& serverID );
 	void setRetryFailureCallback(MessageHandler::RetryFailureCallback& retFailCB);
 	virtual ~MessageHandler();
 	void sendMessage(const char* message);

@@ -8,6 +8,7 @@
 #ifndef VECTORCLOCK_HPP_
 #define VECTORCLOCK_HPP_
 #include <string>
+#include <sstream>
 #include <iostream>
 #include <map>
 class VectorClock;
@@ -18,20 +19,43 @@ class VectorClock
 	friend std::ostream& operator<<(std::ostream &out, const VectorClock &clock);
 	std::string myid;
 	std::map<std::string, int> clock;
+	VectorClock(){}
 public:
 	VectorClock(const std::string& myid) :
 			myid(myid)
 	{
 		this->clock[myid];
 	}
-	std::string encodeClock()
+	std::string encode()
 	{
-		return "tempVecClockFIXME";
+		std::stringstream result;
+		result<<this->myid<<'\n';
+		for(std::map<std::string, int>::iterator it=this->clock.begin();
+				it!=this->clock.end();it++)
+		{
+			result<<it->first<<" "<<it->second<<'\n';
+		}
+		return result.str();
+	}
+	static VectorClock decode(const std::string& input )
+	{
+		VectorClock result;
+		std::stringstream value(input);
+	    std::string clockID;
+	    int clockVal;
+	    value>>result.myid;
+	    while(value>>clockID)
+	    {
+	        value>>clockVal;
+	        result.clock[clockID]=clockVal;
+	    }
+	    return result;
 	}
 	int getMyTime()
 	{
 		return this->clock[myid];
 	}
+
 	bool operator>(const VectorClock& other) const
 	{
 		VectorClock & nonConstMe=(VectorClock&)(*this);
@@ -102,6 +126,23 @@ public:
 		incMyClock();
 		return tmp;
 	}
+
+	int clockDiffs(const VectorClock& other)
+	{
+		int count=0;
+		for (std::map<std::string, int>::const_iterator otherIT = other.clock.begin();
+				otherIT != other.clock.end(); otherIT++)
+		{
+			std::map<std::string, int>::iterator myValIT=this->clock.find(otherIT->first);
+			int myKnownMsgID=myValIT == this->clock.end()?0:myValIT->second;
+			int otherKnownMsgID=otherIT->second;
+
+				count+=otherKnownMsgID>otherKnownMsgID?
+						otherKnownMsgID-otherKnownMsgID:otherKnownMsgID-myKnownMsgID;
+		}
+		return count;
+	}
+
 	void merge(VectorClock& other)
 	{
 		if (other.myid.size() <= 0)
