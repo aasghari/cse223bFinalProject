@@ -11,11 +11,14 @@ For most tasks, the higher-level API will be preferable.
 from mininet.net import Mininet
 from mininet.node import Node
 from mininet.link import Link
+from mininet.link import TCLink
 from mininet.log import setLogLevel, info
 from mininet.util import quietRun
+from mininet.term import makeTerms, cleanUpScreens
+
 
 from time import sleep
-
+net = Mininet(link=TCLink);
 def scratchNet( cname='controller', cargs='-v ptcp:' ):
     "Create network from scratch using Open vSwitch."
 
@@ -75,6 +78,7 @@ def scratchNet( cname='controller', cargs='-v ptcp:' ):
     switch.cmd( 'ovs-vsctl set-controller dp0 tcp:127.0.0.1:6633' )
     switch1.cmd( 'ovs-vsctl set-controller dp0 tcp:127.0.0.1:6633' )
 
+    linkopts = dict(bw=10, delay='5ms', loss=20, max_queue_size=1000, use_htb=True)
     info( '*** Waiting for switch to connect to controller' )
     while 'is_connected' not in quietRun( 'ovs-vsctl show' ):
         sleep( 1 )
@@ -82,7 +86,14 @@ def scratchNet( cname='controller', cargs='-v ptcp:' ):
     info( '\n' )
 
     info( "*** Running test\n" )
-    h0.cmdPrint( 'ping -c1 ' + h1.IP() )
+    h0.terms = makeTerms( [ h0 ], term = 'xterm' )
+    h2.terms = makeTerms( [ h2 ], term = 'xterm' )
+    #net.terms = makeTerms( [ node ], title )
+    h0.cmdPrint( ' /home/amellalghamdi/Desktop/cse223bFinalProject/lib/kv_server 1 239.0.2.1 9000 1 2 3 4 ' )
+    h1.cmdPrint( ' /home/amellalghamdi/Desktop/cse223bFinalProject/lib/kv_server 2 239.0.2.1 9000 1 2 3 4 ' )
+    h2.cmdPrint( '/home/amellalghamdi/Desktop/cse223bFinalProject/lib/kv_server 3 239.0.2.1 9000 1 2 3 4 ' )
+    h3.cmdPrint( ' /home/amellalghamdi/Desktop/cse223bFinalProject/lib/kv_server 4 239.0.2.1 9000 1 2 3 4 ' )
+
 
     info( "*** Stopping network\n" )
     #controller.cmd( 'kill %' + cname )
