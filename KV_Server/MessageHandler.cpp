@@ -147,18 +147,9 @@ void MessageHandler::handle_receive_from(boost::shared_array<char> data,const bo
 		if((diffCount=this->myClock.clockDiffs(recMsgClock))>1)
 		{
 			debug<<"Higher than one diff:"<<diffCount<<"...missing data"<<std::endl;
-<<<<<<< HEAD
 			this->dataSwap[this->recFromEndpoint]=recMsgClock;
 			this->setPendingMissingMessageTimer();
 		}
-=======
-			this->setPendingMissingMessageTimer();
-		}
-		else
-		{
-			//clocks are off by only one (ie this message we are processing) merge the clocks
-			this->myClock.merge(recMsgClock);
->>>>>>> parent of ea40459... undating the clock handling
 
 		if(msgwrap.has_datamsg())
 		{
@@ -257,7 +248,6 @@ void MessageHandler::handle_missingData(const boost::system::error_code& error)
 {
 	if(!error)
 	{
-<<<<<<< HEAD
 		std::map<boost::asio::ip::udp::endpoint, std::set<int> > stillMissing;
 		for(std::map<boost::asio::ip::udp::endpoint,VectorClock>::iterator missIT=this->dataSwap.begin();
 				missIT!=this->dataSwap.end(); )
@@ -274,8 +264,6 @@ void MessageHandler::handle_missingData(const boost::system::error_code& error)
 				this->dataSwap.erase(missIT++);
 			}
 		}
-=======
->>>>>>> parent of ea40459... undating the clock handling
 		debug<<"Missing Data Timer went off"<<std::endl;
 	}
 	else
@@ -346,17 +334,16 @@ void MessageHandler::setPendingMessageRetryTimer()
 }
 void MessageHandler::setPendingMissingMessageTimer()
 {
-<<<<<<< HEAD
 	if(this->dataSwap.size()>0)
-=======
-	//if expired in the past
-	if (this->missingDataTimer.expires_at() <= ::boost::asio::deadline_timer::traits_type::now())
->>>>>>> parent of ea40459... undating the clock handling
 	{
-		this->missingDataTimer.expires_from_now(
-				boost::posix_time::seconds(MessageHandler::MAX_TIME_BEFORE_MISSING_DATA_REQUEST));
-		this->missingDataTimer.async_wait(boost::bind(&MessageHandler::handle_missingData, this,
-			boost::asio::placeholders::error));
+		//if expired in the past
+		if (this->missingDataTimer.expires_at() <= ::boost::asio::deadline_timer::traits_type::now())
+		{
+			this->missingDataTimer.expires_from_now(
+					boost::posix_time::seconds(MessageHandler::MAX_TIME_BEFORE_MISSING_DATA_REQUEST));
+			this->missingDataTimer.async_wait(boost::bind(&MessageHandler::handle_missingData, this,
+				boost::asio::placeholders::error));
+		}
 	}
 }
 void MessageHandler::asynchWaitForData()

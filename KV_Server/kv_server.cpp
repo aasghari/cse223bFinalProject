@@ -54,6 +54,8 @@ int main(int argc, char** argv)
 		clique.insert(argv[i]);
 	}
 	KVServer kvstore(serverID, mcastIP, mcastPort,clique);
+
+	////////////////////////////////////for debug purposes only
 	if(serverID[0]!='1')
 	{
 		for(int i=0; i<10; i++)
@@ -63,6 +65,7 @@ int main(int argc, char** argv)
 			kvstore.put(key.str(), "test");
 		}
 	}
+	/////////////////////////////////////////////////////
 	kvstore.start();
 
 }
