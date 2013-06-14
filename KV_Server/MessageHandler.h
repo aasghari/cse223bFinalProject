@@ -45,7 +45,7 @@ public:
 	class MessageRecievedCallback
 	{
 	public:
-		virtual void handleMessage(const char* message, size_t numBytes)=0;
+		virtual void handleMessage(const char* message, size_t numBytes, VectorClock messageClock)=0;
 	};
 	class RetryFailureCallback
 	{
@@ -115,6 +115,7 @@ private:
 	void setPendingMessageRetryTimer();
 	void setPendingMissingMessageTimer();
 	void asynchWaitForData();
+	void requestMissingData(const boost::asio::ip::udp::endpoint& destination);
 	void sendMessage(const DataMessage& msg, const boost::asio::ip::udp::endpoint& destination);
 	void sendMessage(const ::Network::MsgWrapper& msg, const boost::asio::ip::udp::endpoint& destination);
 	boost::asio::io_service io_service;
@@ -128,8 +129,9 @@ private:
 //	char data_[DATA_MAX_LENGTH];//buffer to store data in
 
 	std::map<int,DataMessage> pendingMsgs;
-	std::map<VectorClock, boost::asio::ip::udp::endpoint> missingData;
-	std::set<DataMessage, DataMessage::DatamsgVectorClockComp> log;
+	std::map<boost::asio::ip::udp::endpoint,VectorClock> dataSwap;
+	std::map<std::string, int> inOrderLog;
+	std::map<std::string, std::set<int> > outOfOrderLog;
 	VectorClock myClock;
 	std::set< std::string> currentClique;
 	const std::string serverID;

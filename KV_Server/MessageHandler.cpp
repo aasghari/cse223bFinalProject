@@ -63,8 +63,9 @@ void MessageHandler::sendMessage(const std::string& message)
 
 	DataMessage msg(message, ++this->myClock,this->currentClique);
 	const DataMessage& sendMsg=this->currentClique.size()>0?this->pendingMsgs[msg.getID()]=msg:msg;
-//	if(this->myClock.getMyTime()<8)
-//		return;
+	//debug to test missing messages
+		if(this->myClock.getMyClock()<8)
+			return;
 	this->sendMessage(sendMsg,sendToEndpoint);
 }
 void MessageHandler::sendMessage(const ::Network::MsgWrapper& msg, const boost::asio::ip::udp::endpoint& destination)
@@ -81,6 +82,19 @@ void MessageHandler::sendMessage(const DataMessage& msg, const boost::asio::ip::
 	debug<<"sending msg:"<<msg.getID()<<" to:"<<destination.address().to_string()<<std::endl;
 	sendMessage(msg.getMsgAsProto(), destination);
 }
+void MessageHandler::requestMissingData(const boost::asio::ip::udp::endpoint& destination)
+{
+	debug<<"Requesting missing data from"<<destination.address().to_string()<<std::endl;
+	::Network::MsgWrapper dataReqWrap;
+	dataReqWrap.mutable_missigndata();
+	dataReqWrap.set_vectorclock(this->myClock.encode());
+	boost::shared_ptr<std::string> msgShardPtr(new std::string(dataReqWrap.SerializeAsString()));
+	socket_.async_send_to(boost::asio::buffer(*msgShardPtr), destination,
+			boost::bind(&MessageHandler::handle_send_to, this, msgShardPtr,
+		            boost::asio::placeholders::error,
+		            boost::asio::placeholders::bytes_transferred));
+
+}
 void MessageHandler::handle_send_to(boost::shared_ptr<std::string> message,
 	      const boost::system::error_code& error,
 	      std::size_t bytes_sent)
@@ -91,12 +105,16 @@ void MessageHandler::handle_send_to(boost::shared_ptr<std::string> message,
 
 	if(wrap.has_ackmsg())
 	{
-		dbgmsg << "Sending Ack for message:"<<wrap.ackmsg().msgid();
+		dbgmsg << "Ack for message:"<<wrap.ackmsg().msgid();
 	}
 
 	if(wrap.has_datamsg())
 	{
-		dbgmsg<<"Sending data msgid:"<<wrap.datamsg().msgid()<<" msg:"<<wrap.datamsg().clientmsg();
+		dbgmsg<<"data msgid:"<<wrap.datamsg().msgid()<<" msg:"<<wrap.datamsg().clientmsg();
+	}
+	if(wrap.has_missigndata())
+	{
+		dbgmsg<<"missdata msgid:";
 	}
 	if (!error)
 	{
@@ -129,22 +147,52 @@ void MessageHandler::handle_receive_from(boost::shared_array<char> data,const bo
 		if((diffCount=this->myClock.clockDiffs(recMsgClock))>1)
 		{
 			debug<<"Higher than one diff:"<<diffCount<<"...missing data"<<std::endl;
-			this->missingData[recMsgClock]=this->recFromEndpoint;
+			this->dataSwap[this->recFromEndpoint]=recMsgClock;
 			this->setPendingMissingMessageTimer();
 		}
-		else
-		{
-			//clocks are off by only one (ie this message we are processing) merge the clocks
-			this->myClock.incrementByID(recMsgClock.getClockID());
 
-		}
 		if(msgwrap.has_datamsg())
 		{
 			const ::Network::DataPassMsg& datamsg=msgwrap.datamsg();
-			this->log.insert(DataMessage(msgwrap));
-			this->msgRevCallback.handleMessage(datamsg.clientmsg().data(), datamsg.clientmsg().size());
+			debug<<"MyClock:"<<this->myClock.getClockByID(recMsgClock.getClockID())<<
+					" OtherClock:"<<recMsgClock.getMyClock()<<std::endl;
+			if(this->myClock.getClockByID(recMsgClock.getClockID())+1==recMsgClock.getMyClock())
+			{
+				debug<<"Logged in order msgid:"<<datamsg.msgid()<<""<<std::endl;
+				this->inOrderLog[recMsgClock.getClockID()]=recMsgClock.getMyClock();
+				//clocks are off by only one (ie this message we are processing) merge the clocks
+				this->myClock.incrementByID(recMsgClock.getClockID());
 
+				std::set<int>& outordermsgs=this->outOfOrderLog[recMsgClock.getClockID()];
+				//sets are order. First element will be the first out of order message we have
+				//if it is one bigger than the message we just got, maybe we just missed one message
+				//start taking all in-order messages off the out of order list
+				std::set<int>::iterator outIT;
+				while((outIT=outordermsgs.begin()) != outordermsgs.end())
+				{
 
+					debug<<"out:"<<(*outIT) <<"orderlog:"<<(this->inOrderLog[recMsgClock.getClockID()]+1)<<std::endl;
+					//if this entry is only one more than the message we just got
+					//these are in order
+					if(	(*outIT)==(this->inOrderLog[recMsgClock.getClockID()]+1))
+					{
+
+						this->inOrderLog[recMsgClock.getClockID()]++;
+						this->myClock.incrementByID(recMsgClock.getClockID());
+						outordermsgs.erase(outordermsgs.begin());
+					}
+					else
+						break;
+				}
+
+			}
+			else
+			{
+				debug<<"Logged out of order msgid:"<<datamsg.msgid()<<" recClock"<<std::endl;
+				this->outOfOrderLog[recMsgClock.getClockID()].insert(recMsgClock.getMyClock());
+			}
+
+			this->msgRevCallback.handleMessage(datamsg.clientmsg().data(), datamsg.clientmsg().size(), msgwrap.vectorclock());
 			debug<<"Got msg from:"<<this->recFromEndpoint.address().to_string()<<" for msgid:"<<datamsg.msgid()<<std::endl;
 			for(int i=0; i<datamsg.cliqueids_size();i++)
 			{
@@ -157,7 +205,6 @@ void MessageHandler::handle_receive_from(boost::shared_array<char> data,const bo
 					debug<<"\tthis serverID:"<<this->serverID<<" is in the requested clique. Sending reply to:"<<
 							this->recFromEndpoint.address().to_string()<<std::endl;
 					this->sendMessage(ackWrap,this->recFromEndpoint);
-
 				}
 			}
 
@@ -182,6 +229,11 @@ void MessageHandler::handle_receive_from(boost::shared_array<char> data,const bo
 				this->pendingMsgs.erase(msgLookup);
 			}
 		}
+		else if(msgwrap.has_missigndata())
+		{
+			VectorClock mdClock=VectorClock::decode(msgwrap.vectorclock());
+			debug<<"Missing data request from:"<<mdClock.getClockID()<<std::endl;
+		}
 		else
 		{
 			debug<<"Unsupported msg type"<<std::endl;
@@ -196,13 +248,20 @@ void MessageHandler::handle_missingData(const boost::system::error_code& error)
 {
 	if(!error)
 	{
-		for(std::map<VectorClock, boost::asio::ip::udp::endpoint>::iterator missIT=this->missingData.begin();
-				missIT!=this->missingData.end(); missIT++)
+		std::map<boost::asio::ip::udp::endpoint, std::set<int> > stillMissing;
+		for(std::map<boost::asio::ip::udp::endpoint,VectorClock>::iterator missIT=this->dataSwap.begin();
+				missIT!=this->dataSwap.end(); )
 		{
-			//if not request it from clique
-			if(this->myClock.clockDiffs(missIT->first)>0)
+			if(this->myClock.clockDiffs(missIT->second)>0 && this->myClock < missIT->second)
 			{
-
+				debug<<"missing data from"<<missIT->first.address().to_string()<<std::endl;
+				requestMissingData(missIT->first);
+				missIT++;
+			}
+			else
+			{
+				debug<<"deteting missing data from"<<missIT->first.address().to_string()<<std::endl;
+				this->dataSwap.erase(missIT++);
 			}
 		}
 		debug<<"Missing Data Timer went off"<<std::endl;
@@ -211,6 +270,8 @@ void MessageHandler::handle_missingData(const boost::system::error_code& error)
 	{
 		debug<<"Missing Data Timer went off with error:"<<error.message()<<std::endl;
 	}
+	this->setPendingMissingMessageTimer();
+
 }
 void MessageHandler::handle_resendTimeout(const boost::system::error_code& error)
 {
@@ -254,7 +315,6 @@ void MessageHandler::handle_resendTimeout(const boost::system::error_code& error
 		}
 	}
 
-
 	this->setPendingMessageRetryTimer();
 
 }
@@ -274,7 +334,7 @@ void MessageHandler::setPendingMessageRetryTimer()
 }
 void MessageHandler::setPendingMissingMessageTimer()
 {
-	if(this->missingData.size()>0)
+	if(this->dataSwap.size()>0)
 	{
 		//if expired in the past
 		if (this->missingDataTimer.expires_at() <= ::boost::asio::deadline_timer::traits_type::now())
@@ -318,7 +378,7 @@ MessageHandler::DataMessage::DataMessage(const std::string& message, VectorClock
 	for(std::set<std::string>::iterator it=cliqueIDs.begin(); it!= cliqueIDs.end();it++)
 		this->msg.mutable_datamsg()->add_cliqueids(*it);
 	this->msg.mutable_datamsg()->set_clientmsg(message);
-	this->msg.mutable_datamsg()->set_msgid(vectorClock.getMyTime());
+	this->msg.mutable_datamsg()->set_msgid(vectorClock.getMyClock());
 	this->msg.set_vectorclock(vectorClock.encode());
 }
 MessageHandler::DataMessage::DataMessage(const ::Network::MsgWrapper& msg):msg(msg)

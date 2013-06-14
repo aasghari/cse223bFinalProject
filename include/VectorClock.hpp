@@ -19,19 +19,21 @@ class VectorClock
 	friend std::ostream& operator<<(std::ostream &out, const VectorClock &clock);
 	std::string myid;
 	std::map<std::string, int> clock;
-	VectorClock(){}
+
 public:
+	VectorClock(){}
 	VectorClock(const std::string& myid) :
 			myid(myid)
 	{
 		this->clock[myid];
 	}
-	std::string encode()
+	std::string encode() const
 	{
+		VectorClock* nonConstsThis=(VectorClock*)this;
 		std::stringstream result;
-		result<<this->myid<<'\n';
-		for(std::map<std::string, int>::iterator it=this->clock.begin();
-				it!=this->clock.end();it++)
+		result<<nonConstsThis->myid<<'\n';
+		for(std::map<std::string, int>::iterator it=nonConstsThis->clock.begin();
+				it!=nonConstsThis->clock.end();it++)
 		{
 			result<<it->first<<" "<<it->second<<'\n';
 		}
@@ -51,11 +53,11 @@ public:
 	    }
 	    return result;
 	}
-	int getMyTime()
+	int getMyClock() const
 	{
-		return this->clock[myid];
+		return ((VectorClock*)this)->clock[myid];
 	}
-	const std::string& getClockID()
+	const std::string& getClockID() const
 	{
 		return myid;
 	}
@@ -131,13 +133,14 @@ public:
 		return tmp;
 	}
 
-	int clockDiffs(const VectorClock& other)
+	int clockDiffs(const VectorClock& other) const
 	{
 		int count=0;
 		for (std::map<std::string, int>::const_iterator otherIT = other.clock.begin();
 				otherIT != other.clock.end(); otherIT++)
 		{
-			std::map<std::string, int>::iterator myValIT=this->clock.find(otherIT->first);
+			VectorClock* nonConstThis=(VectorClock*)this;
+			std::map<std::string, int>::iterator myValIT=nonConstThis->clock.find(otherIT->first);
 			int myKnownMsgID=myValIT == this->clock.end()?0:myValIT->second;
 			int otherKnownMsgID=otherIT->second;
 
@@ -149,6 +152,10 @@ public:
 	void incrementByID(const std::string& id)
 	{
 		this->clock[id]++;
+	}
+	int getClockByID(const std::string& id) const
+	{
+		return ((VectorClock*)this)->clock[id];
 	}
 
 };

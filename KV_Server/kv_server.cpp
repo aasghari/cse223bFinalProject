@@ -18,7 +18,7 @@ public:
 	{
 		net.setRetryFailureCallback(*this);
 	}
-	void handleMessage(const char* message, size_t numBytes)
+	void handleMessage(const char* message, size_t numBytes, VectorClock messageClock)
 	{
 		debug<<"handleMessage: "<<message<<" num bytes:"<<numBytes<<std::endl;
 	}
@@ -44,6 +44,7 @@ public:
 int main(int argc, char** argv)
 {
 
+	system("./setupMininetMulti.sh");
 	char* serverID = argv[1];
 	char* mcastIP= argv[2];
 	unsigned short mcastPort=boost::lexical_cast<unsigned short>(argv[3]);

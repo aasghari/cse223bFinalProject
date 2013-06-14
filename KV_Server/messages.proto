@@ -10,9 +10,14 @@ message AckMsg
 	required string serverID =1 ; //This is the host ID as defined by the clique IDs
 	required int32 msgID =2;
 }
+message MissingDataRequest
+{
+	 
+}
 message MsgWrapper
 {
 	required string vectorClock=1;
 	optional DataPassMsg dataMsg= 2;
 	optional AckMsg ackMsg=3;
+	optional MissingDataRequest missignData=4;
 }
