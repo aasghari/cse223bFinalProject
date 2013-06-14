@@ -157,6 +157,14 @@ public:
 	{
 		return ((VectorClock*)this)->clock[id];
 	}
+	std::map<std::string, int>::const_iterator begin()
+	{
+		return this->clock.begin();
+	}
+	std::map<std::string, int>::const_iterator end()
+	{
+		return this->clock.end();
+	}
 
 };
 

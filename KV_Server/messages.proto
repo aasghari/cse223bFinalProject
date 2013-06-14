@@ -17,7 +17,7 @@ message MissingDataRequest
 message MsgWrapper
 {
 	required string vectorClock=1;
-	optional DataPassMsg dataMsg= 2;
-	optional AckMsg ackMsg=3;
-	optional MissingDataRequest missignData=4;
+	optional DataPassMsg dataMsg= 3;
+	optional AckMsg ackMsg=4;
+	optional MissingDataRequest missingData=5;
 }

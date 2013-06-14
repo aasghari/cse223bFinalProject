@@ -39,7 +39,8 @@ class MessageHandler
 public:
 	static const int DATA_MAX_LENGTH = 1024;
 	static const int MAX_TIME_BEFORE_RESEND_SEC=3;
-	static const int MAX_TIME_BEFORE_MISSING_DATA_REQUEST=2;
+	static const int MAX_TIME_BEFORE_MISSING_DATA_REQUEST=1;
+	static const int MAX_MISSING_DATA_RETRIES=3;
 	static const int MAX_MSG_SEND_RETRIES=3;
 
 	class MessageRecievedCallback
@@ -64,7 +65,9 @@ public:
 	void handle_send_to(boost::shared_ptr<std::string> message,
 		      const boost::system::error_code& error,
 		      std::size_t bytes_sent);
-	void handle_receive_from(boost::shared_array<char> data,const boost::system::error_code& error,size_t bytes_recvd);
+	void handle_receive_from(boost::shared_array<char> data,
+			const boost::system::error_code& error,size_t bytes_recvd,
+			boost::shared_ptr<boost::asio::ip::udp::endpoint> recFrom);
 	void handle_resendTimeout(const boost::system::error_code& error);
 	void handle_missingData(const boost::system::error_code& error);
 	void startHandler();
@@ -99,46 +102,55 @@ private:
 		inline bool operator<=(const DataMessage& other) const {return !this->operator> (other);}
 		inline bool operator>=(const DataMessage& other) const {return !this->operator< (other);}
 
-		class DatamsgVectorClockComp
-		{
-		public:
-			inline bool operator()(const DataMessage& rhs,const DataMessage& lhs) const {return rhs.getVectorClock()<lhs.getVectorClock(); }
-		};
+
 
 	private:
 		::Network::MsgWrapper msg;
 		int numRetries;
 		time_t lastRetried;
 	};
+	class DataWithClocksCompare
+	{
+	public:
+
+		inline bool operator()(const DataMessage& rhs,const DataMessage& lhs) const {return rhs.getVectorClock()<lhs.getVectorClock(); }
+		inline bool operator()(const ::Network::MsgWrapper& rhs, const ::Network::MsgWrapper& lhs)
+		{
+			return VectorClock::decode(rhs.vectorclock())<	VectorClock::decode(lhs.vectorclock());
+		}
+
+	};
 	MessageHandler::MessageRecievedCallback& msgRevCallback;
 	MessageHandler::RetryFailureCallback* retryFailueCallback;
 	void setPendingMessageRetryTimer();
-	void setPendingMissingMessageTimer();
+	void setDataSwapTimer();
 	void asynchWaitForData();
 	void requestMissingData(const boost::asio::ip::udp::endpoint& destination);
 	void sendMessage(const DataMessage& msg, const boost::asio::ip::udp::endpoint& destination);
 	void sendMessage(const ::Network::MsgWrapper& msg, const boost::asio::ip::udp::endpoint& destination);
 	boost::asio::io_service io_service;
-	boost::asio::ip::udp::endpoint sendToEndpoint;
-	boost::asio::ip::udp::endpoint recFromEndpoint;
+	boost::asio::ip::udp::endpoint multicaseEndpoint;
 	boost::asio::ip::udp::socket socket_;
 	boost::asio::deadline_timer resendTimer;
-	boost::asio::deadline_timer missingDataTimer;
+	boost::asio::deadline_timer recheckMissingDataTimer;
 
 
 //	char data_[DATA_MAX_LENGTH];//buffer to store data in
 
 	std::map<int,DataMessage> pendingMsgs;
 	std::map<boost::asio::ip::udp::endpoint,VectorClock> dataSwap;
+	std::map<std::string, std::set< ::Network::MsgWrapper,DataWithClocksCompare> > messageHistory;
 	std::map<std::string, int> inOrderLog;
 	std::map<std::string, std::set<int> > outOfOrderLog;
 	VectorClock myClock;
 	std::set< std::string> currentClique;
 	const std::string serverID;
+	int missingDataRetiesLeft;
 	int bytesSent;//track number of bytes sent
 	int bytesRec;//track number of bytes recieved
 	int msgsSent;	//Track number of messages sent
 	int msgsRec;//track number of messages recieved
 
 };
+
 #endif /* MULTICASTHANDLER_H_ */

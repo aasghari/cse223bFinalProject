@@ -4,7 +4,7 @@
  *  Created on: May 27, 2013
  *      Author: aasghari
  */
-
+#include <time.h>
 #ifndef DEBUG_H_
 #define DEBUG_H_
 #ifdef NO_DEBUG
@@ -13,7 +13,7 @@
 
 #else
 
-#define debug std::cout<<"("<<__FILE__<<":"<<__LINE__<<"): "
+#define debug std::cout<<"("<<__FILE__<<":"<<__LINE__<<" "<<time(NULL)<<"): "
 
 #endif
 
