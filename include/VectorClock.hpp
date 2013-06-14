@@ -57,10 +57,13 @@ public:
 	{
 		return ((VectorClock*)this)->clock[myid];
 	}
+<<<<<<< HEAD
 	const std::string& getClockID() const
 	{
 		return myid;
 	}
+=======
+>>>>>>> parent of ea40459... undating the clock handling
 
 	bool operator>(const VectorClock& other) const
 	{
@@ -149,15 +152,33 @@ public:
 		}
 		return count;
 	}
-	void incrementByID(const std::string& id)
+
+	void merge(VectorClock& other)
 	{
+<<<<<<< HEAD
 		this->clock[id]++;
 	}
 	int getClockByID(const std::string& id) const
 	{
 		return ((VectorClock*)this)->clock[id];
 	}
+=======
+		if (other.myid.size() <= 0)
+			return; //this is a degenerate clock
+		for (std::map<std::string, int>::const_iterator it = other.clock.begin(); it != other.clock.end(); it++)
+		{
+			const std::string& clkid = it->first;
+			int myval = this->clock[clkid];
+			int otherval = it->second;
+			if (myval < otherval)
+			{
+				//never seen this one before, copy its value
+				this->clock[clkid] = otherval;
+			}
+>>>>>>> parent of ea40459... undating the clock handling
 
+		}
+	}
 };
 
 inline std::ostream& operator<<(std::ostream &out, const VectorClock &clock)

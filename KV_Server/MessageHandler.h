@@ -129,9 +129,13 @@ private:
 //	char data_[DATA_MAX_LENGTH];//buffer to store data in
 
 	std::map<int,DataMessage> pendingMsgs;
+<<<<<<< HEAD
 	std::map<boost::asio::ip::udp::endpoint,VectorClock> dataSwap;
 	std::map<std::string, int> inOrderLog;
 	std::map<std::string, std::set<int> > outOfOrderLog;
+=======
+	std::set<DataMessage, DataMessage::DatamsgVectorClockComp> log;
+>>>>>>> parent of ea40459... undating the clock handling
 	VectorClock myClock;
 	std::set< std::string> currentClique;
 	const std::string serverID;
