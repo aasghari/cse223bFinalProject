@@ -2,3 +2,17 @@ Dependencies:
 libprotobuf
 libboost_system-mt 
 libboost_thread-mt
+
+
+TO MAKE:
+Simple run make from the top directory.
+
+To run,
+kv_server <severID> <multicast address> <port> [clique server ID]
+
+For example
+To create run as server 1 using multicast address 239.0.1.2 and port 9000
+with server 1 2 3 as part of your clique:
+
+./kv_server 1 239.0.1.2 9000 1 2 3
+
