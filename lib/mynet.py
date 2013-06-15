@@ -7,18 +7,20 @@ but it exposes the configuration details and allows customization.
 
 For most tasks, the higher-level API will be preferable.
 """
-
+from mininet.topo import Topo
 from mininet.net import Mininet
 from mininet.node import Node
 from mininet.link import Link
 from mininet.link import TCLink
 from mininet.log import setLogLevel, info
 from mininet.util import quietRun
-from mininet.term import makeTerms, cleanUpScreens
+from multiprocessing import Process
+import subprocess
 
-
+import  os
 from time import sleep
 net = Mininet(link=TCLink);
+
 def scratchNet( cname='controller', cargs='-v ptcp:' ):
     "Create network from scratch using Open vSwitch."
 
@@ -68,6 +70,8 @@ def scratchNet( cname='controller', cargs='-v ptcp:' ):
     switch.cmd( 'ovs-vsctl add-br dp0' )
     switch1.cmd( 'ovs-vsctl del-br dp0' )
     switch1.cmd( 'ovs-vsctl add-br dp0' )
+
+    net.addLink(switch, switch1, delay='5ms', loss=20 )
     for intf in switch.intfs.values():
         print switch.cmd( 'ovs-vsctl add-port dp0 %s' % intf )
     for intf in switch1.intfs.values():
@@ -86,15 +90,13 @@ def scratchNet( cname='controller', cargs='-v ptcp:' ):
     info( '\n' )
 
     info( "*** Running test\n" )
-    h0.terms = makeTerms( [ h0 ], term = 'xterm' )
-    h2.terms = makeTerms( [ h2 ], term = 'xterm' )
-    #net.terms = makeTerms( [ node ], title )
-    h0.cmdPrint( ' /home/amellalghamdi/Desktop/cse223bFinalProject/lib/kv_server 1 239.0.2.1 9000 1 2 3 4 ' )
-    h1.cmdPrint( ' /home/amellalghamdi/Desktop/cse223bFinalProject/lib/kv_server 2 239.0.2.1 9000 1 2 3 4 ' )
-    h2.cmdPrint( '/home/amellalghamdi/Desktop/cse223bFinalProject/lib/kv_server 3 239.0.2.1 9000 1 2 3 4 ' )
-    h3.cmdPrint( ' /home/amellalghamdi/Desktop/cse223bFinalProject/lib/kv_server 4 239.0.2.1 9000 1 2 3 4 ' )
 
+    h0.sendCmd( ' /home/amellalghamdi/Desktop/cse223bFinalProject/lib/kv_server 1 239.0.2.1 9000 1 2 3 4 >&1 > `ifconfig | grep eth | cut -f1 -d`.out1`' )
+    h1.cmdPrint( ' /home/amellalghamdi/Desktop/cse223bFinalProject/lib/kv_server 2 239.0.2.1 9000 1 2 3 4 >&1 > `ifconfig | grep eth | cut -f1 -d`.out2`' )
+    h2.cmdPrint( '/home/amellalghamdi/Desktop/cse223bFinalProject/lib/kv_server 3 239.0.2.1 9000 1 2 3 4 >&1 > `ifconfig | grep eth | cut -f1 -d`.out3' )
+    h3.cmdPrint( ' /home/amellalghamdi/Desktop/cse223bFinalProject/lib/kv_server 4 239.0.2.1 9000 1 2 3 4 >&1 > `ifconfig | grep eth | cut -f1 -d`.out4' )
 
+  
     info( "*** Stopping network\n" )
     #controller.cmd( 'kill %' + cname )
     #switch.cmd( 'ovs-vsctl del-br dp0' )
