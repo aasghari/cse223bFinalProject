@@ -56,7 +56,7 @@ int main(int argc, char** argv)
 	KVServer kvstore(serverID, mcastIP, mcastPort,clique);
 
 	////////////////////////////////////for debug purposes only
-	if(serverID[0]!='1')
+	if(serverID[0]=='2')
 	{
 		for(int i=0; i<10; i++)
 		{
